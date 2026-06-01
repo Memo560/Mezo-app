@@ -1,14 +1,20 @@
 package com.example.ui
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.data.ChapterEntity
-import com.example.data.HistoryEntity
-import com.example.data.MangaEntity
-import com.example.data.MangaRepository
+import com.example.data.*
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 sealed class MangaUiScreen {
     object Library : MangaUiScreen()
@@ -26,6 +32,22 @@ data class UserProfile(
     val score: Int = 180,
     val joinedDate: String = "يونيو 2026",
     val avatarRes: String = "avatar_1"
+)
+
+data class TrackingService(
+    val id: String, // "mal" or "anilist"
+    val name: String,
+    val isConnected: Boolean,
+    val username: String = ""
+)
+
+data class MangaTrackingProgress(
+    val mangaId: String,
+    val serviceId: String, // "mal" or "anilist"
+    val status: String,    // "قرأت" / "أقرأ حالياً" / "أخطط للقراءة" / "متوقف"
+    val chaptersRead: Int,
+    val totalChapters: Int = 24,
+    val score: Float = 0.0f
 )
 
 data class KeiyoushiExtension(
@@ -83,6 +105,24 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
     // --- Authentication & Profile updating ---
     private val _currentUser = MutableStateFlow<UserProfile?>(null) // null represents logged-out
     val currentUser = _currentUser.asStateFlow()
+
+    // --- Tracking Services State ---
+    private val _trackingServices = MutableStateFlow<List<TrackingService>>(listOf(
+        TrackingService("local", "التتبع المحلي المدمج (بدون حساب)", true, "مستكشف المانجا"),
+        TrackingService("mal", "MyAnimeList", false),
+        TrackingService("anilist", "AniList", false)
+    ))
+    val trackingServices = _trackingServices.asStateFlow()
+
+    private val _mangaTrackingProgress = MutableStateFlow<Map<String, List<MangaTrackingProgress>>>(emptyMap())
+    val mangaTrackingProgress = _mangaTrackingProgress.asStateFlow()
+
+    // --- Local Reading Statistics ---
+    private val _totalMinutesRead = MutableStateFlow(340)
+    val totalMinutesRead = _totalMinutesRead.asStateFlow()
+
+    private val _readingStreak = MutableStateFlow(5)
+    val readingStreak = _readingStreak.asStateFlow()
 
     // --- Organizing Manga in Custom Reading Lists ---
     private val _readingLists = MutableStateFlow<List<String>>(listOf("الكل", "المفضلة", "قائمة القراءة السريعة", "للقراءة لاحقاً", "مستمر"))
@@ -294,7 +334,65 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
                 totalPages = maxPages,
                 isRead = isCompleted
             )
+            // Increment local stats and reward experience points on completion
+            _totalMinutesRead.value = _totalMinutesRead.value + 4
+            if (isCompleted) {
+                _currentUser.value = _currentUser.value?.let {
+                    it.copy(score = it.score + 10)
+                }
+                
+                // Automatically increment connected external tracker progress as well!
+                _trackingServices.value.forEach { service ->
+                    if (service.isConnected) {
+                        val currentList = _mangaTrackingProgress.value[mangaId] ?: emptyList()
+                        val currentProg = currentList.find { it.serviceId == service.id }
+                        val chaptersSoFar = (currentProg?.chaptersRead ?: 0) + 1
+                        updateTrackingProgress(
+                            mangaId = mangaId,
+                            serviceId = service.id,
+                            status = currentProg?.status ?: "أقرأ حالياً",
+                            chaptersRead = if (chaptersSoFar <= 24) chaptersSoFar else 24,
+                            score = currentProg?.score ?: 0.0f,
+                            totalChapters = 24
+                        )
+                    }
+                }
+            }
         }
+    }
+
+    // --- Tracking Service Operations ---
+    fun connectTrackingService(serviceId: String, username: String) {
+        _trackingServices.value = _trackingServices.value.map {
+            if (it.id == serviceId) it.copy(isConnected = true, username = username) else it
+        }
+    }
+
+    fun disconnectTrackingService(serviceId: String) {
+        _trackingServices.value = _trackingServices.value.map {
+            if (it.id == serviceId) it.copy(isConnected = false, username = "") else it
+        }
+    }
+
+    fun updateTrackingProgress(
+        mangaId: String,
+        serviceId: String,
+        status: String,
+        chaptersRead: Int,
+        score: Float,
+        totalChapters: Int = 24
+    ) {
+        val currentList = _mangaTrackingProgress.value[mangaId] ?: emptyList()
+        val rest = currentList.filter { it.serviceId != serviceId }
+        val updated = MangaTrackingProgress(
+            mangaId = mangaId,
+            serviceId = serviceId,
+            status = status,
+            chaptersRead = chaptersRead,
+            totalChapters = totalChapters,
+            score = score
+        )
+        _mangaTrackingProgress.value = _mangaTrackingProgress.value + (mangaId to (rest + updated))
     }
 
     fun removeHistoryForManga(mangaId: String) {
@@ -436,6 +534,260 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
                     isLiked = !it.isLiked
                 )
             } else it
+        }
+    }
+
+    // --- LOCAL BACKUP & RESTORE SYSTEM ---
+    private val moshi = Moshi.Builder()
+        .add(KotlinJsonAdapterFactory())
+        .build()
+
+    private val _availableBackups = MutableStateFlow<List<File>>(emptyList())
+    val availableBackups = _availableBackups.asStateFlow()
+
+    private val _autoBackupInterval = MutableStateFlow("weekly") // none, daily, weekly, monthly
+    val autoBackupInterval = _autoBackupInterval.asStateFlow()
+
+    fun loadBackupSettings(context: Context) {
+        val prefs = context.getSharedPreferences("mahyun_backups_prefs", Context.MODE_PRIVATE)
+        _autoBackupInterval.value = prefs.getString("auto_backup_interval", "weekly") ?: "weekly"
+        refreshAvailableBackups(context)
+        checkForAutoBackup(context)
+    }
+
+    fun setAutoBackupInterval(context: Context, interval: String) {
+        _autoBackupInterval.value = interval
+        val prefs = context.getSharedPreferences("mahyun_backups_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("auto_backup_interval", interval).apply()
+    }
+
+    fun refreshAvailableBackups(context: Context) {
+        val backupDir = File(context.filesDir, "backups")
+        if (!backupDir.exists()) {
+            backupDir.mkdirs()
+        }
+        val files = backupDir.listFiles()?.filter { it.extension == "json" }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        _availableBackups.value = files
+    }
+
+    fun createBackup(context: Context, isAuto: Boolean = false, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val mangasRaw = repository.getAllMangasDirect()
+                val chaptersRaw = repository.getAllChaptersDirect()
+                val historyRaw = repository.getAllHistoryDirect()
+
+                val mangasPay = mangasRaw.map {
+                    MangaBackupEntity(
+                        id = it.id, titleAr = it.titleAr, titleEn = it.titleEn,
+                        author = it.author, descriptionAr = it.descriptionAr,
+                        coverGradientStart = it.coverGradientStart, coverGradientEnd = it.coverGradientEnd,
+                        status = it.status, rating = it.rating, genres = it.genres,
+                        sourceName = it.sourceName, isBookmarked = it.isBookmarked,
+                        ratingVotes = it.ratingVotes, lastReadChapterId = it.lastReadChapterId,
+                        lastReadChapterTitle = it.lastReadChapterTitle, lastReadTime = it.lastReadTime
+                    )
+                }
+
+                val chaptersPay = chaptersRaw.map {
+                    ChapterBackupEntity(
+                        id = it.id, mangaId = it.mangaId, title = it.title,
+                        number = it.number, releaseDate = it.releaseDate,
+                        isRead = it.isRead, lastReadPage = it.lastReadPage, totalPages = it.totalPages
+                    )
+                }
+
+                val historyPay = historyRaw.map {
+                    HistoryBackupEntity(
+                        mangaId = it.mangaId, chapterId = it.chapterId,
+                        chapterTitle = it.chapterTitle, mangaTitleAr = it.mangaTitleAr,
+                        coverGradientStart = it.coverGradientStart, coverGradientEnd = it.coverGradientEnd,
+                        lastReadPage = it.lastReadPage, totalPages = it.totalPages, timestamp = it.timestamp
+                    )
+                }
+
+                // Tracking Progress Serialization
+                val trackingProgAdapter = moshi.adapter<Map<String, List<MangaTrackingProgress>>>(
+                    Types.newParameterizedType(Map::class.java, String::class.java, Types.newParameterizedType(List::class.java, MangaTrackingProgress::class.java))
+                )
+                val trackingJson = trackingProgAdapter.toJson(_mangaTrackingProgress.value)
+
+                val payload = BackupPayload(
+                    version = 1,
+                    timestamp = System.currentTimeMillis(),
+                    username = _currentUser.value?.username ?: "مستكشف المانجا",
+                    score = _currentUser.value?.score?.toDouble() ?: 180.0,
+                    totalMinutesRead = _totalMinutesRead.value,
+                    readingStreak = _readingStreak.value,
+                    trackingServicesJson = trackingJson,
+                    mangas = mangasPay,
+                    chapters = chaptersPay,
+                    history = historyPay
+                )
+
+                val jsonStr = moshi.adapter(BackupPayload::class.java).toJson(payload)
+
+                val backupDir = File(context.filesDir, "backups")
+                if (!backupDir.exists()) {
+                    backupDir.mkdirs()
+                }
+
+                val prefix = if (isAuto) "auto_backup" else "manual_backup"
+                val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.ENGLISH)
+                val fileName = "${prefix}_${sdf.format(Date())}.json"
+                val file = File(backupDir, fileName)
+                file.writeText(jsonStr)
+
+                launch(Dispatchers.Main) {
+                    refreshAvailableBackups(context)
+                    onComplete(true, file.name)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                launch(Dispatchers.Main) {
+                    onComplete(false, e.localizedMessage ?: "حدث خطأ أثناء حفظ النسخة الاحتياطية")
+                }
+            }
+        }
+    }
+
+    fun restoreBackupFromFile(context: Context, file: File, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (!file.exists()) {
+                    launch(Dispatchers.Main) {
+                        onComplete(false, "الملف غير موجود")
+                    }
+                    return@launch
+                }
+                val jsonStr = file.readText()
+                restoreBackupFromJson(context, jsonStr, onComplete)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                launch(Dispatchers.Main) {
+                    onComplete(false, e.localizedMessage ?: "حدث خطأ غير متوقع")
+                }
+            }
+        }
+    }
+
+    fun restoreBackupFromJson(context: Context, jsonStr: String, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val payload = moshi.adapter(BackupPayload::class.java).fromJson(jsonStr)
+                if (payload == null) {
+                    launch(Dispatchers.Main) {
+                        onComplete(false, "ملف النسخة الاحتياطية فارغ أو غير صالحة")
+                    }
+                    return@launch
+                }
+
+                // Clean Room tables
+                repository.deleteAllMangas()
+                repository.deleteAllChapters()
+                repository.clearHistory()
+
+                // Map and inserts
+                val mangasEntities = payload.mangas.map {
+                    MangaEntity(
+                        id = it.id, titleAr = it.titleAr, titleEn = it.titleEn,
+                        author = it.author, descriptionAr = it.descriptionAr,
+                        coverGradientStart = it.coverGradientStart, coverGradientEnd = it.coverGradientEnd,
+                        status = it.status, rating = it.rating, genres = it.genres,
+                        sourceName = it.sourceName, isBookmarked = it.isBookmarked,
+                        ratingVotes = it.ratingVotes, lastReadChapterId = it.lastReadChapterId,
+                        lastReadChapterTitle = it.lastReadChapterTitle, lastReadTime = it.lastReadTime
+                    )
+                }
+
+                val chaptersEntities = payload.chapters.map {
+                    ChapterEntity(
+                        id = it.id, mangaId = it.mangaId, title = it.title,
+                        number = it.number, releaseDate = it.releaseDate,
+                        isRead = it.isRead, lastReadPage = it.lastReadPage, totalPages = it.totalPages
+                    )
+                }
+
+                val historyEntities = payload.history.map {
+                    HistoryEntity(
+                        mangaId = it.mangaId, chapterId = it.chapterId,
+                        chapterTitle = it.chapterTitle, mangaTitleAr = it.mangaTitleAr,
+                        coverGradientStart = it.coverGradientStart, coverGradientEnd = it.coverGradientEnd,
+                        lastReadPage = it.lastReadPage, totalPages = it.totalPages, timestamp = it.timestamp
+                    )
+                }
+
+                repository.insertMangas(mangasEntities)
+                repository.insertChapters(chaptersEntities)
+                repository.insertHistoryList(historyEntities)
+
+                // Restore View Model state flows
+                _totalMinutesRead.value = payload.totalMinutesRead
+                _readingStreak.value = payload.readingStreak
+
+                _currentUser.value = UserProfile(
+                    username = payload.username.ifEmpty { "مستكشف المانجا" },
+                    email = "local_backup@mahyun.app",
+                    score = payload.score.toInt(),
+                    joinedDate = "مستعادة محلياً"
+                )
+
+                // Restore external tracking if saved in payload
+                if (payload.trackingServicesJson.isNotEmpty()) {
+                    try {
+                        val trackingProgAdapter = moshi.adapter<Map<String, List<MangaTrackingProgress>>>(
+                            Types.newParameterizedType(Map::class.java, String::class.java, Types.newParameterizedType(List::class.java, MangaTrackingProgress::class.java))
+                        )
+                        val trackMap = trackingProgAdapter.fromJson(payload.trackingServicesJson)
+                        if (trackMap != null) {
+                            _mangaTrackingProgress.value = trackMap
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                launch(Dispatchers.Main) {
+                    onComplete(true, "تمت استعادة البيانات بنجاح!")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                launch(Dispatchers.Main) {
+                    onComplete(false, e.localizedMessage ?: "حدث خطأ أثناء استرداد النسخة الاحتياطية")
+                }
+            }
+        }
+    }
+
+    private fun checkForAutoBackup(context: Context) {
+        val prefs = context.getSharedPreferences("mahyun_backups_prefs", Context.MODE_PRIVATE)
+        val interval = prefs.getString("auto_backup_interval", "weekly") ?: "weekly"
+        if (interval == "none") return
+
+        val lastTime = prefs.getLong("last_auto_backup_timestamp", 0L)
+        val currentTime = System.currentTimeMillis()
+        val elapsed = currentTime - lastTime
+
+        val limit = when (interval) {
+            "daily" -> 24L * 60 * 60 * 1000
+            "weekly" -> 7L * 24 * 60 * 60 * 1000
+            "monthly" -> 30L * 24 * 60 * 60 * 1000
+            else -> 7L * 24 * 60 * 60 * 1000
+        }
+
+        if (elapsed >= limit || lastTime == 0L) {
+            createBackup(context, isAuto = true) { success, _ ->
+                if (success) {
+                    prefs.edit().putLong("last_auto_backup_timestamp", currentTime).apply()
+                }
+            }
+        }
+    }
+
+    fun deleteBackupFile(context: Context, file: File) {
+        if (file.exists()) {
+            file.delete()
+            refreshAvailableBackups(context)
         }
     }
 }

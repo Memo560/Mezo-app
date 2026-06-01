@@ -62,4 +62,23 @@ interface MangaDao {
 
     @Query("DELETE FROM reading_history")
     suspend fun clearAllHistory()
+
+    // --- Bulk and Backup Queries ---
+    @Query("SELECT * FROM mangas")
+    suspend fun getAllMangasDirect(): List<MangaEntity>
+
+    @Query("SELECT * FROM chapters")
+    suspend fun getAllChaptersDirect(): List<ChapterEntity>
+
+    @Query("SELECT * FROM reading_history")
+    suspend fun getAllHistoryDirect(): List<HistoryEntity>
+
+    @Query("DELETE FROM mangas")
+    suspend fun deleteAllMangas()
+
+    @Query("DELETE FROM chapters")
+    suspend fun deleteAllChapters()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertHistoryList(history: List<HistoryEntity>)
 }

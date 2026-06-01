@@ -1,7 +1,9 @@
 package com.example.ui
 
+import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import java.io.File
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
@@ -60,6 +62,10 @@ fun MangaScreen(
     val currentScreen by viewModel.currentScreen.collectAsState()
     val isDarkMode by viewModel.isDarkMode.collectAsState()
     val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.loadBackupSettings(context)
+    }
 
     // Set colors according to dynamic dark mode toggle
     val backgroundColor = if (isDarkMode) SlateDark else SlateLightBg
@@ -244,14 +250,14 @@ fun MangaBottomNav(
             onClick = { onNavigate(MangaUiScreen.Profile) },
             icon = {
                 Icon(
-                    imageVector = Icons.Default.AccountCircle,
-                    contentDescription = "حسابي",
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "الإعدادات",
                     modifier = Modifier.size(22.dp)
                 )
             },
             label = {
                 Text(
-                    text = "حسابي",
+                    text = "الإعدادات",
                     fontSize = 11.sp,
                     fontWeight = if (isProfileSelected) FontWeight.Bold else FontWeight.Normal
                 )
@@ -1121,11 +1127,96 @@ fun MangaHistoryView(viewModel: MangaViewModel) {
 
 // --- 4. THE AUTHENTICATION AND DYNAMIC PROFILE VIEW ---
 @Composable
+fun SettingsListItem(
+    title: String,
+    description: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconColor: Color = MaterialTheme.colorScheme.primary,
+    isExpanded: Boolean = false,
+    onToggle: () -> Unit,
+    textColor: Color,
+    textSecColor: Color,
+    cardBg: Color,
+    content: @Composable () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .clickable { onToggle() },
+        colors = CardDefaults.cardColors(containerColor = cardBg),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(iconColor.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        fontWeight = FontWeight.Bold,
+                        color = textColor,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = description,
+                        color = textSecColor,
+                        fontSize = 11.sp
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = textSecColor,
+                    modifier = Modifier
+                        .size(16.dp)
+                        .graphicsLayer {
+                            rotationZ = if (isExpanded) 90f else 0f
+                        }
+                )
+            }
+
+            if (isExpanded) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Divider(color = textSecColor.copy(alpha = 0.08f))
+                Spacer(modifier = Modifier.height(12.dp))
+                content()
+            }
+        }
+    }
+}
+
+@Composable
 fun MangaProfileView(viewModel: MangaViewModel) {
+    val context = LocalContext.current
     val currentUser by viewModel.currentUser.collectAsState()
     val isDarkMode by viewModel.isDarkMode.collectAsState()
     val libraryMangas by viewModel.libraryMangas.collectAsState()
     val readingHistory by viewModel.readingHistory.collectAsState()
+    val trackingServices by viewModel.trackingServices.collectAsState()
+    val totalMinutesRead by viewModel.totalMinutesRead.collectAsState()
+    val readingStreak by viewModel.readingStreak.collectAsState()
+    val isVerticalReadingDefault by viewModel.isVerticalReading.collectAsState()
+    val readingFontSizeDefault by viewModel.readingFontSize.collectAsState()
 
     val textColor = if (isDarkMode) Color.White else TextPrimaryLight
     val textSecColor = if (isDarkMode) TextSecondaryDark else TextSecondaryLight
@@ -1138,6 +1229,21 @@ fun MangaProfileView(viewModel: MangaViewModel) {
 
     var isEditingProfile by remember { mutableStateOf(false) }
     var selectedAvatar by remember { mutableStateOf("avatar_1") }
+    
+    var showConnectionDialogByService by remember { mutableStateOf<String?>(null) }
+    var bindingUsernameInput by remember { mutableStateOf("") }
+
+    var showImportDialog by remember { mutableStateOf(false) }
+    var importText by remember { mutableStateOf("") }
+    var fileToRestoreConfirm by remember { mutableStateOf<File?>(null) }
+    var isSettingsMode by remember { mutableStateOf(false) }
+
+    var isTrackingExpanded by remember { mutableStateOf(false) }
+    var isThemeExpanded by remember { mutableStateOf(false) }
+    var isBackupExpanded by remember { mutableStateOf(false) }
+
+    val availableBackups by viewModel.availableBackups.collectAsState()
+    val autoBackupInterval by viewModel.autoBackupInterval.collectAsState()
 
     Column(
         modifier = Modifier
@@ -1147,17 +1253,36 @@ fun MangaProfileView(viewModel: MangaViewModel) {
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "الملف الشخصي",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = textColor
-        )
-        Text(
-            text = "سجل تقدمك وقوائمك الشخصية وسجل دخولك لمزامنتها",
-            fontSize = 12.sp,
-            color = textSecColor
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isSettingsMode) "إعدادات التطبيق" else "الملف الشخصي",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textColor
+                )
+                Text(
+                    text = if (isSettingsMode) "الوضع الليلى، خدمات التتبع، والتحكم بالنسخ الاحتياطي" else "سجل تقدمك وقوائمك الشخصية وسجل دخولك لمزامنتها",
+                    fontSize = 11.sp,
+                    color = textSecColor
+                )
+            }
+
+            IconButton(
+                onClick = { isSettingsMode = !isSettingsMode },
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = if (isSettingsMode) Icons.Default.Close else Icons.Default.Settings,
+                    contentDescription = if (isSettingsMode) "الإعدادات" else "الملف الشخصي",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(20.dp))
 
@@ -1266,232 +1391,939 @@ fun MangaProfileView(viewModel: MangaViewModel) {
                 }
             }
         } else {
-            // PROFILE DETAILS CARD FOR REGISTERED USERS
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = cardBg),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Avatar view
-                        val avatarColor = when (current.avatarRes) {
-                            "avatar_1" -> Color(0xFFEF4444)
-                            "avatar_2" -> Color(0xFF3B82F6)
-                            "avatar_3" -> Color(0xFF10B981)
-                            "avatar_4" -> Color(0xFFF59E0B)
-                            "avatar_5" -> Color(0xFF8B5CF6)
-                            else -> Color(0xFFEC4899)
-                        }
+            if (isSettingsMode) {
+                // --- SETTINGS LIST WITH COLLAPSIBLE ITEMS (MAINTENANCE DESIGN REFACTOR) ---
 
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(avatarColor),
-                            contentAlignment = Alignment.Center
+                // Section 1: Tracking & Sync Accounts
+                SettingsListItem(
+                    title = "مزامنة خدمات التتبع الخارجية",
+                    description = "اربط حسابك لتتبع تقدم فصول المانجا ومزامنته تلقائياً مع المواقع العالمية",
+                    icon = Icons.Default.Share,
+                    iconColor = MaterialTheme.colorScheme.primary,
+                    isExpanded = isTrackingExpanded,
+                    onToggle = { isTrackingExpanded = !isTrackingExpanded },
+                    textColor = textColor,
+                    textSecColor = textSecColor,
+                    cardBg = cardBg
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        trackingServices.filter { it.id != "local" }.forEach { service ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = cardBg.copy(alpha = 0.5f)),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val logoColor = if (service.id == "mal") Color(0xFF2E51A2) else Color(0xFF3577FF)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(logoColor),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = service.name.take(1),
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = service.name, color = textColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        if (service.isConnected) {
+                                            Text(text = "متصل باسم: ${service.username}", color = Color(0xFF10B981), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        } else {
+                                            Text(text = "غير متصل", color = textSecColor, fontSize = 11.sp)
+                                        }
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            if (service.isConnected) {
+                                                viewModel.disconnectTrackingService(service.id)
+                                            } else {
+                                                showConnectionDialogByService = service.id
+                                                bindingUsernameInput = ""
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (service.isConnected) Color(0xFFEF4444).copy(alpha = 0.15f) else MaterialTheme.colorScheme.primary,
+                                            contentColor = if (service.isConnected) Color(0xFFEF4444) else Color.White
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            if (service.isConnected) "إلغاء الربط" else "ربط الحساب",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Section 2: Appearance & Reading Settings
+                SettingsListItem(
+                    title = "مظهر التطبيق وخيارات القراءة",
+                    description = "التحكم بالوضع الليلي، اتجاه الصفحات الافتراضي وحجم خط الحوارات",
+                    icon = Icons.Default.Settings,
+                    iconColor = MaterialTheme.colorScheme.secondary,
+                    isExpanded = isThemeExpanded,
+                    onToggle = { isThemeExpanded = !isThemeExpanded },
+                    textColor = textColor,
+                    textSecColor = textSecColor,
+                    cardBg = cardBg
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        // Switch for Dark Mode
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = current.username.take(1).uppercase(),
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(imageVector = Icons.Default.Settings, contentDescription = null, tint = textColor, modifier = Modifier.size(18.dp))
+                                Text("الوضع الليلـي للمظهر", color = textColor, fontSize = 13.sp)
+                            }
+                            Switch(
+                                checked = isDarkMode,
+                                onCheckedChange = { viewModel.toggleDarkMode() }
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Divider(color = textSecColor.copy(alpha = 0.08f))
 
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(current.username, fontWeight = FontWeight.Bold, color = textColor, fontSize = 18.sp)
-                            Text(current.email, color = textSecColor, fontSize = 12.sp)
-                            Text("عضوية نشطة منذ ${current.joinedDate}", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        }
-
-                        IconButton(onClick = { isEditingProfile = !isEditingProfile }) {
-                            Icon(imageVector = Icons.Default.Edit, contentDescription = "تعديل الملف", tint = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-
-                    if (isEditingProfile) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Divider(color = textSecColor.copy(alpha = 0.2f))
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text("تعديل الاسم والبريد الشخصي:", fontWeight = FontWeight.Bold, color = textColor, fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        var editName by remember { mutableStateOf(current.username) }
-                        var editEmail by remember { mutableStateOf(current.email) }
-
-                        OutlinedTextField(
-                            value = editName,
-                            onValueChange = { editName = it },
-                            placeholder = { Text("الاسم") },
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = textColor, unfocusedTextColor = textColor
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = editEmail,
-                            onValueChange = { editEmail = it },
-                            placeholder = { Text("البريد الإلكتروني") },
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = textColor, unfocusedTextColor = textColor
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Text("اختر لون الرمز الخاص بك:", fontWeight = FontWeight.Bold, color = textColor, fontSize = 12.sp)
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        // Colored dots for Avatar selection
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            listOf("avatar_1", "avatar_2", "avatar_3", "avatar_4", "avatar_5", "avatar_6").forEach { av ->
-                                val dotColor = when (av) {
-                                    "avatar_1" -> Color(0xFFEF4444)
-                                    "avatar_2" -> Color(0xFF3B82F6)
-                                    "avatar_3" -> Color(0xFF10B981)
-                                    "avatar_4" -> Color(0xFFF59E0B)
-                                    "avatar_5" -> Color(0xFF8B5CF6)
-                                    else -> Color(0xFFEC4899)
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .background(dotColor)
-                                        .border(
-                                            width = if (selectedAvatar == av) 2.dp else 0.dp,
-                                            color = textColor,
-                                            shape = CircleShape
-                                        )
-                                        .clickable { selectedAvatar = av }
+                        // Reading direction defaults
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("طريقة عرض الصفحات الافتراضية", color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text(if (isVerticalReadingDefault) "عرض عمودي مستمر (ويب تون)" else "عرض أفقي تقليدي (صفحة تلو الأخرى)", color = textSecColor, fontSize = 10.sp)
+                            }
+                            Button(
+                                onClick = { viewModel.toggleReadingDirection() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                    contentColor = MaterialTheme.colorScheme.primary
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = if (isVerticalReadingDefault) "التبديل لأفقي" else "التبديل لعمودي",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Divider(color = textSecColor.copy(alpha = 0.08f))
 
-                        Button(
-                            onClick = {
-                                if (editName.isNotEmpty() && editEmail.isNotEmpty()) {
-                                    viewModel.updateProfile(editName, editEmail, selectedAvatar)
-                                    isEditingProfile = false
-                                }
-                            },
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("حفظ التغييرات")
+                        // Custom default dialogues font size
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("حجم الخط الافتراضي لحوارات المانجا", color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text("${readingFontSizeDefault.toInt()}sp", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Slider(
+                                value = readingFontSizeDefault,
+                                onValueChange = { viewModel.setReadingFontSize(it) },
+                                valueRange = 10f..24f,
+                                steps = 7,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // STATISTICS LAYOUT GRID
-            Text("إحصائيات القراءة", fontWeight = FontWeight.Bold, color = textColor, fontSize = 16.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Bookmarked count card
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(containerColor = cardBg)
+                // Section 3: Safe Backups & Recovery
+                SettingsListItem(
+                    title = "النسخ الاحتياطي والاستعادة الذكية",
+                    description = "احفظ تاريخ قراءتك، الفصول المفضلة، وإحصائيات تقدمك واستعدها بأي وقت محلياً",
+                    icon = Icons.Default.Refresh,
+                    iconColor = MaterialTheme.colorScheme.tertiary,
+                    isExpanded = isBackupExpanded,
+                    onToggle = { isBackupExpanded = !isBackupExpanded },
+                    textColor = textColor,
+                    textSecColor = textSecColor,
+                    cardBg = cardBg
                 ) {
                     Column(
-                        modifier = Modifier.padding(14.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = PriorityHigh, modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(text = "${libraryMangas.size}", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = textColor)
-                        Text(text = "سلسلة بالمكتبة", fontSize = 11.sp, color = textSecColor)
+                        Text(
+                            "يتم تشفير وتخزين النسخ الاحتياطية محلياً لنقل تقدم حسابك وسجل مفضلاتك بسهولة دون اتصال بخوادم خارجية.",
+                            color = textSecColor,
+                            fontSize = 11.sp
+                        )
+
+                        Divider(color = textSecColor.copy(alpha = 0.08f))
+
+                        // Auto-backup configuration
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                "جدولة المزامنة التلقائية:",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textColor
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                listOf(
+                                    "none" to "إيقاف",
+                                    "daily" to "يومي",
+                                    "weekly" to "أسبوعي",
+                                    "monthly" to "شهري"
+                                ).forEach { (value, label) ->
+                                    val isSelected = autoBackupInterval == value
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 2.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSelected) MaterialTheme.colorScheme.primary else cardBg.copy(alpha = 0.5f))
+                                            .border(
+                                                1.dp,
+                                                if (isSelected) MaterialTheme.colorScheme.primary else textSecColor.copy(alpha = 0.15f),
+                                                RoundedCornerShape(8.dp)
+                                            )
+                                            .clickable { viewModel.setAutoBackupInterval(context, value) }
+                                            .padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            label,
+                                            color = if (isSelected) Color.White else textSecColor,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Divider(color = textSecColor.copy(alpha = 0.08f))
+
+                        // Trigger operations
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    viewModel.createBackup(context) { success, result ->
+                                        if (success) {
+                                            Toast.makeText(context, "تم حفظ النسخة الاحتياطية بنجاح باسم $result", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            Toast.makeText(context, "فشل إنشاء النسخة: $result", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("نسخ الآن", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    importText = ""
+                                    showImportDialog = true
+                                },
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
+                            ) {
+                                Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("استيراد نص", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        // Local backups file list
+                        if (availableBackups.isNotEmpty()) {
+                            Divider(color = textSecColor.copy(alpha = 0.08f))
+                            Text(
+                                "النسخ المتوفرة المخزنة محلياً:",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textColor
+                            )
+
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                availableBackups.take(5).forEach { file ->
+                                    val isAuto = file.name.startsWith("auto_backup")
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(textColor.copy(alpha = 0.03f))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                if (isAuto) "نسخة تلقائية" else "نسخة يدوية",
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isAuto) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+                                                fontSize = 11.sp
+                                            )
+                                            Text(
+                                                file.name.substringAfter("_").substringBefore(".json").replace("_", " "),
+                                                color = textSecColor,
+                                                fontSize = 9.sp
+                                            )
+                                        }
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            IconButton(
+                                                onClick = {
+                                                    try {
+                                                        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                        val clipData = android.content.ClipData.newPlainText("Mahyun Backup", file.readText())
+                                                        clipboardManager.setPrimaryClip(clipData)
+                                                        Toast.makeText(context, "تم نسخ محتوى ملف التتبع لمشاركته", Toast.LENGTH_SHORT).show()
+                                                    } catch (e: Exception) {
+                                                        Toast.makeText(context, "فشل نسخ النص", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Send,
+                                                    contentDescription = "مشاركة",
+                                                    tint = textSecColor,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+
+                                            IconButton(
+                                                onClick = { fileToRestoreConfirm = file },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Refresh,
+                                                    contentDescription = "استعادة",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+
+                                            IconButton(
+                                                onClick = { viewModel.deleteBackupFile(context, file) },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "حذف",
+                                                    tint = PriorityHigh,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
-                // History reads card
-                Card(
-                    modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(containerColor = cardBg)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(imageVector = Icons.Default.List, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(text = "${readingHistory.size}", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = textColor)
-                        Text(text = "سلاسل مقروءة", fontSize = 11.sp, color = textSecColor)
-                    }
+                // Connection Popup Dialog
+                if (showConnectionDialogByService != null) {
+                    val serviceId = showConnectionDialogByService!!
+                    val serviceName = if (serviceId == "mal") "MyAnimeList" else "AniList"
+                    AlertDialog(
+                        onDismissRequest = { showConnectionDialogByService = null },
+                        title = {
+                            Text(
+                                text = "ربط وتأكيد حساب $serviceName",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textColor
+                            )
+                        },
+                        text = {
+                            Column {
+                                Text(
+                                    text = "أدخل اسم المستخدم لتأكيد تسجيل الدخول الفوري ومزامنة فصول المانجا التي تقرأها تلقائياً:",
+                                    fontSize = 12.sp,
+                                    color = textColor.copy(alpha = 0.8f)
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                OutlinedTextField(
+                                    value = bindingUsernameInput,
+                                    onValueChange = { bindingUsernameInput = it },
+                                    placeholder = { Text("اسم المستخدم في $serviceName") },
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = textColor, unfocusedTextColor = textColor
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    if (bindingUsernameInput.trim().isNotEmpty()) {
+                                        viewModel.connectTrackingService(serviceId, bindingUsernameInput.trim())
+                                        showConnectionDialogByService = null
+                                    }
+                                }
+                            ) {
+                                Text("ربط الآن")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showConnectionDialogByService = null }) {
+                                Text("إلغاء")
+                            }
+                        }
+                    )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-            // USER APP THEME AND SETTINGS SET
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = cardBg)
-            ) {
-                Column(
+                // Modern stand-alone Sign Out Card
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .clickable { viewModel.logoutUser() },
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("إعدادات التطبيق", fontWeight = FontWeight.Bold, color = textColor, fontSize = 14.sp)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(imageVector = Icons.Default.Settings, contentDescription = null, tint = textColor, modifier = Modifier.size(18.dp))
-                            Text("الوضع الليلـي", color = textColor, fontSize = 13.sp)
-                        }
-                        Switch(
-                            checked = isDarkMode,
-                            onCheckedChange = { viewModel.toggleDarkMode() }
-                        )
-                    }
-
-                    Divider(color = textSecColor.copy(alpha = 0.15f))
-
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { viewModel.logoutUser() }
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(imageVector = Icons.Default.ExitToApp, contentDescription = null, tint = PriorityHigh, modifier = Modifier.size(18.dp))
-                            Text("تسجيل الخروج", color = PriorityHigh, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(PriorityHigh.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ExitToApp,
+                                    contentDescription = null,
+                                    tint = PriorityHigh,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Text(
+                                text = "تسجيل الخروج من الحساب الشخصي",
+                                color = PriorityHigh,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = PriorityHigh,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Button(
+                    onClick = { isSettingsMode = false },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = cardBg
+                    )
+                ) {
+                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = textColor)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("العودة لمعلومات الحساب والإحصائيات", color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                // --- PRIMARY PROFILE PROFILE INFO & STATS VIEW ---
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Avatar view
+                            val avatarColor = when (current.avatarRes) {
+                                "avatar_1" -> Color(0xFFEF4444)
+                                "avatar_2" -> Color(0xFF3B82F6)
+                                "avatar_3" -> Color(0xFF10B981)
+                                "avatar_4" -> Color(0xFFF59E0B)
+                                "avatar_5" -> Color(0xFF8B5CF6)
+                                else -> Color(0xFFEC4899)
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(CircleShape)
+                                    .background(avatarColor),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = current.username.take(1).uppercase(),
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(current.username, fontWeight = FontWeight.Bold, color = textColor, fontSize = 18.sp)
+                                Text(current.email, color = textSecColor, fontSize = 12.sp)
+                                Text("عضوية نشطة منذ ${current.joinedDate}", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+
+                            IconButton(onClick = { isEditingProfile = !isEditingProfile }) {
+                                Icon(imageVector = Icons.Default.Edit, contentDescription = "تعديل الملف", tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+
+                        if (isEditingProfile) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Divider(color = textSecColor.copy(alpha = 0.2f))
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text("تعديل الاسم والبريد الشخصي:", fontWeight = FontWeight.Bold, color = textColor, fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            var editName by remember { mutableStateOf(current.username) }
+                            var editEmail by remember { mutableStateOf(current.email) }
+
+                            OutlinedTextField(
+                                value = editName,
+                                onValueChange = { editName = it },
+                                placeholder = { Text("الاسم") },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = textColor, unfocusedTextColor = textColor
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = editEmail,
+                                onValueChange = { editEmail = it },
+                                placeholder = { Text("البريد الإلكتروني") },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = textColor, unfocusedTextColor = textColor
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Text("اختر لون الرمز الخاص بك:", fontWeight = FontWeight.Bold, color = textColor, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // Colored dots for Avatar selection
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                listOf("avatar_1", "avatar_2", "avatar_3", "avatar_4", "avatar_5", "avatar_6").forEach { av ->
+                                    val dotColor = when (av) {
+                                        "avatar_1" -> Color(0xFFEF4444)
+                                        "avatar_2" -> Color(0xFF3B82F6)
+                                        "avatar_3" -> Color(0xFF10B981)
+                                        "avatar_4" -> Color(0xFFF59E0B)
+                                        "avatar_5" -> Color(0xFF8B5CF6)
+                                        else -> Color(0xFFEC4899)
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(dotColor)
+                                            .border(
+                                                width = if (selectedAvatar == av) 2.dp else 0.dp,
+                                                color = textColor,
+                                                shape = CircleShape
+                                            )
+                                            .clickable { selectedAvatar = av }
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = {
+                                    if (editName.isNotEmpty() && editEmail.isNotEmpty()) {
+                                        viewModel.updateProfile(editName, editEmail, selectedAvatar)
+                                        isEditingProfile = false
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("حفظ التغييرات")
+                            }
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // STATISTICS LAYOUT GRID
+                Text("إحصائيات القراءة", fontWeight = FontWeight.Bold, color = textColor, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Bookmarked count card
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = cardBg)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(imageVector = Icons.Default.Favorite, contentDescription = null, tint = PriorityHigh, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(text = "${libraryMangas.size}", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = textColor)
+                            Text(text = "سلسلة بالمكتبة", fontSize = 11.sp, color = textSecColor, textAlign = TextAlign.Center)
+                        }
+                    }
+
+                    // History reads card
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = cardBg)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(text = "${readingHistory.size}", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = textColor)
+                            Text(text = "سلاسل مقروءة", fontSize = 11.sp, color = textSecColor, textAlign = TextAlign.Center)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Total hours read card
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = cardBg)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            val hrs = totalMinutesRead.toFloat() / 60
+                            Text(text = String.format("%.1f", hrs) + " س", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = textColor)
+                            Text(text = "وقت القراءة الإجمالي", fontSize = 11.sp, color = textSecColor, textAlign = TextAlign.Center, maxLines = 1)
+                        }
+                    }
+
+                    // Streak count card
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = cardBg)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(text = "$readingStreak أيام", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = textColor)
+                            Text(text = "سلسلة أيام القراءة", fontSize = 11.sp, color = textSecColor, textAlign = TextAlign.Center, maxLines = 1)
+                        }
+                    }
+                }
+
+                // Real dynamic Genre Analysis bar charts
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp)
+                    ) {
+                        Text("تحليل التصنيفات المفضلة لديك", fontWeight = FontWeight.Bold, color = textColor, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("أنواع المانجا الأكثر تكراراً في مكتبتك الشخصية بنسب بيانية", fontSize = 11.sp, color = textSecColor)
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        val genreCounts = remember(libraryMangas) {
+                            val counts = mutableMapOf<String, Int>()
+                            libraryMangas.forEach { manga ->
+                                manga.genres.split(",").forEach { g ->
+                                    val name = g.trim()
+                                    if (name.isNotEmpty()) {
+                                        counts[name] = (counts[name] ?: 0) + 1
+                                    }
+                                }
+                            }
+                            if (counts.isEmpty()) {
+                                mapOf("أكشن" to 4, "مغامرة" to 3, "خيال" to 2, "دراما" to 1)
+                            } else {
+                                counts.toList().sortedByDescending { it.second }.take(4).toMap()
+                            }
+                        }
+
+                        val maxCount = genreCounts.values.maxOrNull() ?: 1
+                        genreCounts.forEach { (genre, count) ->
+                            val percent = count.toFloat() / maxCount.toFloat()
+                            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(text = genre, color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = "$count سلاسل", color = textSecColor, fontSize = 11.sp)
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                // Progress bar
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(textColor.copy(alpha = 0.08f))
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(percent)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    listOf(
+                                                        MaterialTheme.colorScheme.primary,
+                                                        MaterialTheme.colorScheme.secondary
+                                                    )
+                                                )
+                                            )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // --- ELEGANT CLICKABLE ROW/CARD LINKING TO SETTINGS ---
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isSettingsMode = true },
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("اعدادات التطبيق والنسخ الاحتياطي", fontWeight = FontWeight.Bold, color = textColor, fontSize = 13.sp)
+                            Text("الوضع الليلى، ربط حسابات تتبع الفصول، والنسخ ودورياته تلقائياً", color = textSecColor, fontSize = 11.sp)
+                        }
+
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack, // Standard arrows are auto-mirrored
+                            contentDescription = null,
+                            tint = textSecColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
+        }
+
+        // Confirm restore dialog
+        if (fileToRestoreConfirm != null) {
+            val file = fileToRestoreConfirm!!
+            AlertDialog(
+                onDismissRequest = { fileToRestoreConfirm = null },
+                title = {
+                    Text(
+                        "تأكيد استعادة النسخة الاحتياطية",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textColor
+                    )
+                },
+                text = {
+                    Text(
+                        "هل أنت متأكد من رغبتك في استعادة هذه النسخة؟ سيقوم هذا باستبدال قائمة المانجا الحالية وسجل قراءتك ونقاط تقدمك بالكامل ببيانات ملف النسخة الاحتياطية.",
+                        fontSize = 12.sp,
+                        color = textSecColor
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.restoreBackupFromFile(context, file) { success, msg ->
+                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                fileToRestoreConfirm = null
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("استعادة الآن", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { fileToRestoreConfirm = null }) {
+                        Text("إلغاء", color = textSecColor)
+                    }
+                }
+            )
+        }
+
+        // Custom JSON Import Dialog
+        if (showImportDialog) {
+            AlertDialog(
+                onDismissRequest = { showImportDialog = false },
+                title = {
+                    Text(
+                        "استيراد نسخة احتياطية (نص JSON)",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textColor
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "قم بلصق محتويات نص JSON الخاص بنسختك الاحتياطية هنا لاستعادة تتبعك بالكامل فوراً:",
+                            fontSize = 11.sp,
+                            color = textSecColor
+                        )
+                        OutlinedTextField(
+                            value = importText,
+                            onValueChange = { importText = it },
+                            placeholder = { Text("{ \"version\": 1, ... }", fontSize = 11.sp) },
+                            singleLine = false,
+                            maxLines = 8,
+                            modifier = Modifier.fillMaxWidth().height(150.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = textColor, unfocusedTextColor = textColor
+                            )
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (importText.trim().isNotEmpty()) {
+                                viewModel.restoreBackupFromJson(context, importText.trim()) { success, msg ->
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                    if (success) showImportDialog = false
+                                }
+                            }
+                        },
+                        enabled = importText.trim().isNotEmpty(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("استيراد واستعادة", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showImportDialog = false }) {
+                        Text("إلغاء", color = textSecColor)
+                    }
+                }
+            )
         }
 
         Spacer(modifier = Modifier.height(40.dp))
@@ -1512,6 +2344,8 @@ fun MangaDetailView(
     val readingLists by viewModel.readingLists.collectAsState()
     val downloadedChapters by viewModel.downloadedChapters.collectAsState()
     val downloadProgress by viewModel.downloadingChapterInProgress.collectAsState()
+    val trackingServices by viewModel.trackingServices.collectAsState()
+    val mangaTrackingProgressMap by viewModel.mangaTrackingProgress.collectAsState()
 
     val context = LocalContext.current
     val currentManga = manga ?: return
@@ -1792,6 +2626,204 @@ fun MangaDetailView(
                 lineHeight = 20.sp,
                 textAlign = TextAlign.Start
             )
+
+            // --- DYNAMIC EXTERNAL TRACKING SYNC PANEL ---
+            Spacer(modifier = Modifier.height(18.dp))
+            val connectedServices = trackingServices.filter { it.isConnected }
+            if (connectedServices.isEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = cardBackground.copy(alpha = 0.6f)),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, textSecColor.copy(alpha = 0.12f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("ربط تتبع الفصول (MAL / AniList)", fontWeight = FontWeight.Bold, color = textColor, fontSize = 13.sp)
+                            Text("اربط حساب MyAnimeList أو AniList في صفحة الملف الشخصي لمزامنة فصولك تلقائياً هنا وبالمواقع العالمية.", fontSize = 11.sp, color = textSecColor)
+                        }
+                    }
+                }
+            } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = cardBackground),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("تتبع ومزامنة الفصول (الخوادم السحابية)", fontWeight = FontWeight.Bold, color = textColor, fontSize = 14.sp)
+                        }
+                        
+                        connectedServices.forEach { service ->
+                            Spacer(modifier = Modifier.height(10.dp))
+                            val progressList = mangaTrackingProgressMap[currentManga.id] ?: emptyList()
+                            val prog = progressList.find { it.serviceId == service.id }
+                            
+                            val currentStatus = prog?.status ?: "أخطط للقراءة"
+                            val currentChapters = prog?.chaptersRead ?: 0
+                            val currentScore = prog?.score ?: 0f
+                            
+                            val logoColor = when (service.id) {
+                                "mal" -> Color(0xFF2E51A2)
+                                "anilist" -> Color(0xFF3577FF)
+                                else -> MaterialTheme.colorScheme.primary
+                            }
+                            
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(textColor.copy(alpha = 0.03f))
+                                    .padding(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(logoColor),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(service.name.take(1), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(service.name, color = textColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
+                                    
+                                    // Status tag selector
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        listOf("أقرأ حالياً", "مخطط", "مكتمل", "متوقف").forEach { st ->
+                                            val isSel = currentStatus == st
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(if (isSel) logoColor else cardBackground)
+                                                    .border(1.dp, if (isSel) logoColor else textSecColor.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                                    .clickable {
+                                                        viewModel.updateTrackingProgress(
+                                                            mangaId = currentManga.id,
+                                                            serviceId = service.id,
+                                                            status = st,
+                                                            chaptersRead = currentChapters,
+                                                            score = currentScore
+                                                        )
+                                                    }
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(st, color = if (isSel) Color.White else textSecColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(10.dp))
+                                
+                                // Chapter Incremental tracker
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("الفصول المقروءة:", color = textSecColor, fontSize = 11.sp)
+                                    
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = {
+                                                if (currentChapters > 0) {
+                                                    viewModel.updateTrackingProgress(
+                                                        mangaId = currentManga.id,
+                                                        serviceId = service.id,
+                                                        status = currentStatus,
+                                                        chaptersRead = currentChapters - 1,
+                                                        score = currentScore
+                                                    )
+                                                }
+                                            },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Text("-", color = textColor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                        }
+                                        
+                                        Text(
+                                            "$currentChapters / ${chapters.size.coerceAtLeast(24)}",
+                                            color = textColor,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.padding(horizontal = 8.dp)
+                                        )
+                                        
+                                        IconButton(
+                                            onClick = {
+                                                if (currentChapters < chapters.size.coerceAtLeast(24)) {
+                                                    viewModel.updateTrackingProgress(
+                                                        mangaId = currentManga.id,
+                                                        serviceId = service.id,
+                                                        status = currentStatus,
+                                                        chaptersRead = currentChapters + 1,
+                                                        score = currentScore
+                                                    )
+                                                }
+                                            },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Text("+", color = textColor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                        }
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                // Rating score slider
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("تقييمك على ${service.name}:", color = textSecColor, fontSize = 11.sp)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Slider(
+                                            value = currentScore,
+                                            onValueChange = {
+                                                viewModel.updateTrackingProgress(
+                                                    mangaId = currentManga.id,
+                                                    serviceId = service.id,
+                                                    status = currentStatus,
+                                                    chaptersRead = currentChapters,
+                                                    score = it
+                                                )
+                                            },
+                                            valueRange = 0f..10f,
+                                            steps = 9,
+                                            modifier = Modifier.width(120.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(text = String.format("%.1f", currentScore), color = logoColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -2898,3 +3930,5 @@ fun Modifier.shadowElevation() = this.drawBehind {
         size = size
     )
 }
+
+

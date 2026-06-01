@@ -70,4 +70,12 @@ class MangaRepository(private val mangaDao: MangaDao) {
     suspend fun clearHistory() {
         mangaDao.clearAllHistory()
     }
+
+    suspend fun getAllMangasDirect(): List<MangaEntity> = mangaDao.getAllMangasDirect()
+    suspend fun getAllChaptersDirect(): List<ChapterEntity> = mangaDao.getAllChaptersDirect()
+    suspend fun getAllHistoryDirect(): List<HistoryEntity> = mangaDao.getAllHistoryDirect()
+
+    suspend fun deleteAllMangas() = mangaDao.deleteAllMangas()
+    suspend fun deleteAllChapters() = mangaDao.deleteAllChapters()
+    suspend fun insertHistoryList(history: List<HistoryEntity>) = mangaDao.insertHistoryList(history)
 }
