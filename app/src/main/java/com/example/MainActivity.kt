@@ -26,8 +26,15 @@ class MainActivity : ComponentActivity() {
       )
 
       val isDarkMode by viewModel.isDarkMode.collectAsState()
+      val pureBlackDark by viewModel.pureBlackDark.collectAsState()
+      val themePreset by viewModel.themeAccentPreset.collectAsState()
 
-      MyApplicationTheme(darkTheme = isDarkMode, dynamicColor = false) {
+      MyApplicationTheme(
+          darkTheme = isDarkMode,
+          pureBlackDark = pureBlackDark,
+          themePreset = themePreset,
+          dynamicColor = false
+      ) {
         MangaScreen(
             viewModel = viewModel,
             modifier = Modifier.fillMaxSize()

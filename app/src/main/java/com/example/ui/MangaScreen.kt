@@ -19,6 +19,9 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
@@ -65,6 +68,7 @@ fun MangaScreen(
 
     LaunchedEffect(Unit) {
         viewModel.loadBackupSettings(context)
+        viewModel.initRepositories(context)
     }
 
     // Set colors according to dynamic dark mode toggle
@@ -85,7 +89,12 @@ fun MangaScreen(
                 visible = currentScreen is MangaUiScreen.Library || 
                           currentScreen is MangaUiScreen.Sources || 
                           currentScreen is MangaUiScreen.History ||
-                          currentScreen is MangaUiScreen.Profile,
+                          currentScreen is MangaUiScreen.Profile ||
+                          currentScreen is MangaUiScreen.Updates ||
+                          currentScreen is MangaUiScreen.More ||
+                          currentScreen is MangaUiScreen.Settings ||
+                          currentScreen is MangaUiScreen.AppearanceSettings ||
+                          currentScreen is MangaUiScreen.LibrarySettings,
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
             ) {
@@ -122,6 +131,21 @@ fun MangaScreen(
                     is MangaUiScreen.Profile -> {
                         MangaProfileView(viewModel = viewModel)
                     }
+                    is MangaUiScreen.Updates -> {
+                        MangaUpdatesView(viewModel = viewModel)
+                    }
+                    is MangaUiScreen.More -> {
+                        MangaMoreView(viewModel = viewModel)
+                    }
+                    is MangaUiScreen.Settings -> {
+                        MangaSettingsView(viewModel = viewModel)
+                    }
+                    is MangaUiScreen.AppearanceSettings -> {
+                        MangaAppearanceSettingsView(viewModel = viewModel)
+                    }
+                    is MangaUiScreen.LibrarySettings -> {
+                        MangaLibrarySettingsView(viewModel = viewModel)
+                    }
                     is MangaUiScreen.Detail -> {
                         MangaDetailView(
                             viewModel = viewModel,
@@ -140,7 +164,7 @@ fun MangaScreen(
     }
 }
 
-// --- Custom Bottom Navigation Bar with Profile Tab ---
+// --- Custom Bottom Navigation Bar with RTL-ordered Tabs ---
 @Composable
 fun MangaBottomNav(
     currentScreen: MangaUiScreen,
@@ -163,6 +187,130 @@ fun MangaBottomNav(
             )
             .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
     ) {
+        // order left-to-right (which renders right-to-left under standard RTL locale, but we enforce it beautifully)
+        // More, Sources, History, Updates, Library
+
+        // 1. المزيد (More)
+        val isMoreSelected = currentScreen is MangaUiScreen.More || currentScreen is MangaUiScreen.Settings || currentScreen is MangaUiScreen.AppearanceSettings || currentScreen is MangaUiScreen.LibrarySettings
+        NavigationBarItem(
+            selected = isMoreSelected,
+            onClick = { onNavigate(MangaUiScreen.More) },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.MoreHoriz,
+                    contentDescription = "المزيد",
+                    modifier = Modifier.size(22.dp)
+                )
+            },
+            label = {
+                Text(
+                    text = "المزيد",
+                    fontSize = 11.sp,
+                    fontWeight = if (isMoreSelected) FontWeight.Bold else FontWeight.Normal
+                )
+            },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = colorSchemePrimaryOrWhite(isMoreSelected),
+                selectedTextColor = MaterialTheme.colorScheme.primary,
+                indicatorColor = MaterialTheme.colorScheme.primary,
+                unselectedIconColor = textSecondaryColor,
+                unselectedTextColor = textSecondaryColor
+            )
+        )
+
+        // 2. تصفح (Browse)
+        val isSourcesSelected = currentScreen is MangaUiScreen.Sources
+        NavigationBarItem(
+            selected = isSourcesSelected,
+            onClick = { onNavigate(MangaUiScreen.Sources) },
+            icon = {
+                BadgedBox(
+                    badge = {
+                        Badge(containerColor = MaterialTheme.colorScheme.primary) {
+                            Text("2", color = Color.White, fontSize = 9.sp)
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "تصفح",
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            },
+            label = {
+                Text(
+                    text = "تصفح",
+                    fontSize = 11.sp,
+                    fontWeight = if (isSourcesSelected) FontWeight.Bold else FontWeight.Normal
+                )
+            },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = colorSchemePrimaryOrWhite(isSourcesSelected),
+                selectedTextColor = MaterialTheme.colorScheme.primary,
+                indicatorColor = MaterialTheme.colorScheme.primary,
+                unselectedIconColor = textSecondaryColor,
+                unselectedTextColor = textSecondaryColor
+            )
+        )
+
+        // 3. السجل (History)
+        val isHistorySelected = currentScreen is MangaUiScreen.History
+        NavigationBarItem(
+            selected = isHistorySelected,
+            onClick = { onNavigate(MangaUiScreen.History) },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "السجل",
+                    modifier = Modifier.size(22.dp)
+                )
+            },
+            label = {
+                Text(
+                    text = "السجل",
+                    fontSize = 11.sp,
+                    fontWeight = if (isHistorySelected) FontWeight.Bold else FontWeight.Normal
+                )
+            },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = colorSchemePrimaryOrWhite(isHistorySelected),
+                selectedTextColor = MaterialTheme.colorScheme.primary,
+                indicatorColor = MaterialTheme.colorScheme.primary,
+                unselectedIconColor = textSecondaryColor,
+                unselectedTextColor = textSecondaryColor
+            )
+        )
+
+        // 4. التحديثات (Updates)
+        val isUpdatesSelected = currentScreen is MangaUiScreen.Updates
+        NavigationBarItem(
+            selected = isUpdatesSelected,
+            onClick = { onNavigate(MangaUiScreen.Updates) },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = "التحديثات",
+                    modifier = Modifier.size(22.dp)
+                )
+            },
+            label = {
+                Text(
+                    text = "التحديثات",
+                    fontSize = 11.sp,
+                    fontWeight = if (isUpdatesSelected) FontWeight.Bold else FontWeight.Normal
+                )
+            },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = colorSchemePrimaryOrWhite(isUpdatesSelected),
+                selectedTextColor = MaterialTheme.colorScheme.primary,
+                indicatorColor = MaterialTheme.colorScheme.primary,
+                unselectedIconColor = textSecondaryColor,
+                unselectedTextColor = textSecondaryColor
+            )
+        )
+
+        // 5. المكتبة (Library)
         val isLibSelected = currentScreen is MangaUiScreen.Library
         NavigationBarItem(
             selected = isLibSelected,
@@ -182,88 +330,7 @@ fun MangaBottomNav(
                 )
             },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color.White,
-                selectedTextColor = MaterialTheme.colorScheme.primary,
-                indicatorColor = MaterialTheme.colorScheme.primary,
-                unselectedIconColor = textSecondaryColor,
-                unselectedTextColor = textSecondaryColor
-            )
-        )
-
-        val isSourcesSelected = currentScreen is MangaUiScreen.Sources
-        NavigationBarItem(
-            selected = isSourcesSelected,
-            onClick = { onNavigate(MangaUiScreen.Sources) },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "تصفح",
-                    modifier = Modifier.size(22.dp)
-                )
-            },
-            label = {
-                Text(
-                    text = "تصفح",
-                    fontSize = 11.sp,
-                    fontWeight = if (isSourcesSelected) FontWeight.Bold else FontWeight.Normal
-                )
-            },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color.White,
-                selectedTextColor = MaterialTheme.colorScheme.primary,
-                indicatorColor = MaterialTheme.colorScheme.primary,
-                unselectedIconColor = textSecondaryColor,
-                unselectedTextColor = textSecondaryColor
-            )
-        )
-
-        val isHistorySelected = currentScreen is MangaUiScreen.History
-        NavigationBarItem(
-            selected = isHistorySelected,
-            onClick = { onNavigate(MangaUiScreen.History) },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.List,
-                    contentDescription = "السجل",
-                    modifier = Modifier.size(22.dp)
-                )
-            },
-            label = {
-                Text(
-                    text = "السجل",
-                    fontSize = 11.sp,
-                    fontWeight = if (isHistorySelected) FontWeight.Bold else FontWeight.Normal
-                )
-            },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color.White,
-                selectedTextColor = MaterialTheme.colorScheme.primary,
-                indicatorColor = MaterialTheme.colorScheme.primary,
-                unselectedIconColor = textSecondaryColor,
-                unselectedTextColor = textSecondaryColor
-            )
-        )
-
-        val isProfileSelected = currentScreen is MangaUiScreen.Profile
-        NavigationBarItem(
-            selected = isProfileSelected,
-            onClick = { onNavigate(MangaUiScreen.Profile) },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "الإعدادات",
-                    modifier = Modifier.size(22.dp)
-                )
-            },
-            label = {
-                Text(
-                    text = "الإعدادات",
-                    fontSize = 11.sp,
-                    fontWeight = if (isProfileSelected) FontWeight.Bold else FontWeight.Normal
-                )
-            },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color.White,
+                selectedIconColor = colorSchemePrimaryOrWhite(isLibSelected),
                 selectedTextColor = MaterialTheme.colorScheme.primary,
                 indicatorColor = MaterialTheme.colorScheme.primary,
                 unselectedIconColor = textSecondaryColor,
@@ -271,6 +338,11 @@ fun MangaBottomNav(
             )
         )
     }
+}
+
+@Composable
+fun colorSchemePrimaryOrWhite(selected: Boolean): Color {
+    return if (selected) Color.White else MaterialTheme.colorScheme.primary
 }
 
 // --- 1. LIBRARY VIEW with Custom Playlists ---
@@ -628,13 +700,24 @@ fun MangaCatalogView(viewModel: MangaViewModel) {
     val selectedSource by viewModel.selectedSource.collectAsState()
     val isDarkMode by viewModel.isDarkMode.collectAsState()
     val extensions by viewModel.keiyoushiExtensions.collectAsState()
+    val repositories by viewModel.repositories.collectAsState()
+    val selectedRepoUrl by viewModel.selectedRepository.collectAsState()
 
+    val context = LocalContext.current
     var activeSegment by remember { mutableStateOf("sources") } // "sources" or "keiyoushi"
+
+    var showAddRepoDialog by remember { mutableStateOf(false) }
+    var repoUrlInput by remember { mutableStateOf("") }
 
     val textColor = if (isDarkMode) Color.White else TextPrimaryLight
     val textSecColor = if (isDarkMode) TextSecondaryDark else TextSecondaryLight
     val cardBackground = if (isDarkMode) SlateCard else SlateLightCard
     val inputBackground = if (isDarkMode) SlateCard else Color(0xFFF1F5F9)
+
+    // Filter available extensions to those belonging to the currently selected repository
+    val activeRepoExts = remember(extensions, selectedRepoUrl) {
+        extensions.filter { it.repoUrl == selectedRepoUrl }.distinctBy { it.id }
+    }
 
     Column(
         modifier = Modifier
@@ -660,11 +743,11 @@ fun MangaCatalogView(viewModel: MangaViewModel) {
                 ),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(1.1f)
                     .height(38.dp),
                 contentPadding = PaddingValues(0.dp)
             ) {
-                Text("المصادر المتوفرة", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("القصص المتوفرة", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
 
             Button(
@@ -683,8 +766,8 @@ fun MangaCatalogView(viewModel: MangaViewModel) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.AddCircle, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Text("مستودع Keiyoushi", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Icon(imageVector = Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Text("إدارة المستودعات", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -700,7 +783,7 @@ fun MangaCatalogView(viewModel: MangaViewModel) {
                 color = textColor
             )
             Text(
-                text = "اكتشف آلاف الفصول والقصص المانجا المترجمة من مصادرك النشطة",
+                text = "اكتشف آلاف الفصول والقصص المانجا المترجمة من مستودعاتك النشطة",
                 fontSize = 12.sp,
                 color = textSecColor
             )
@@ -749,7 +832,9 @@ fun MangaCatalogView(viewModel: MangaViewModel) {
                     color = textSecColor,
                     modifier = Modifier.padding(end = 4.dp)
                 )
-                val sources = listOf("الكل", "مانجا ليك", "مانجا ديكس", "MangaSlayer")
+                val sources = listOf("الكل") + extensions.filter { it.isInstalled && it.isEnabled }.map { ext ->
+                    if (ext.id == "arab_manga") "بوابة المانجا" else ext.sourceName
+                }.distinct()
                 Box(modifier = Modifier.fillMaxWidth()) {
                     ScrollableRow(items = sources, selectedItem = selectedSource, isDarkMode = isDarkMode) {
                         viewModel.setSourceFilter(it)
@@ -790,14 +875,14 @@ fun MangaCatalogView(viewModel: MangaViewModel) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "🔍 لا نتائج متطابقة أو المصادر معطلة",
+                        text = "🔍 لا نتائج متطابقة أو المستودعات معطلة",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = textColor
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "فَعِّل إضافات Keiyoushi للتأكد من المزامنة وجلب المحتوى.",
+                        text = "فَعِّل مصادرك من تبويب المستودعات للتأكد من جلب المحتوى.",
                         fontSize = 12.sp,
                         color = textSecColor
                     )
@@ -822,38 +907,233 @@ fun MangaCatalogView(viewModel: MangaViewModel) {
                 }
             }
         } else {
-            // KEIYOUSHI EXTENSION MANAGER INDEX VIEW
+            // REPOSITORIES & SOURCES INDEX VIEW (إدارة المستودعات)
             Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "المستودعات والقصص",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textColor
+                    )
+                    IconButton(
+                        onClick = { showAddRepoDialog = true },
+                        modifier = Modifier
+                            .size(34.dp)
+                            .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = "إضافة مستودع", tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                }
                 Text(
-                    text = "مستودع إضافات Keiyoushi",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = textColor
-                )
-                Text(
-                    text = "قم بتثبيت وتنزيل وتحديث حزم مصادر المانجا مباشرة من مستودع مجتمع ميهون الرسمي",
+                    text = "قم بإدارة مستودعات المانجا الافتراضية والخاصة مع جلب مصادر فصولها الفعالة والتعامل مع روابط الـ JSON مباشرة",
                     fontSize = 12.sp,
                     color = textSecColor
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
+                // Section 1: Active Repositories
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.List, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("المستودعات المضافة", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Scrollable/Grid list of active Repositories
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(extensions) { ext ->
-                        ExtensionRowCard(
-                            ext = ext,
-                            isDarkMode = isDarkMode,
-                            onInstall = { viewModel.installExtension(ext.id) },
-                            onUninstall = { viewModel.uninstallExtension(ext.id) },
-                            onToggle = { viewModel.toggleExtension(ext.id) }
-                        )
+                    repositories.forEach { repo ->
+                        val isSelected = repo.url == selectedRepoUrl
+                        Card(
+                            onClick = { viewModel.selectRepository(repo.url) },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else cardBackground
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                            ),
+                            modifier = Modifier.widthIn(min = 130.dp, max = 190.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = repo.name,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = textColor,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = if (repo.url == "local") "محلي مدمج" else "مستودع خارجي",
+                                        fontSize = 9.sp,
+                                        color = textSecColor
+                                    )
+                                }
+                                if (repo.isCustom) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    IconButton(
+                                        onClick = { viewModel.removeRepository(repo.url, context) },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "حذف المستودع",
+                                            tint = PriorityHigh,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Simple shortcut "+" card
+                    Card(
+                        onClick = { showAddRepoDialog = true },
+                        colors = CardDefaults.cardColors(containerColor = cardBackground),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.size(width = 50.dp, height = 44.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "إضافة مستودع", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Section 2: Extensions inside the selected Repo
+                val selectedRepoName = repositories.find { it.url == selectedRepoUrl }?.name ?: "المجهول"
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("المصادر المتوفرة بـ ($selectedRepoName)", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textColor)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (activeRepoExts.isEmpty()) {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("لا تتوفر أي مصادر في هذا المستودع حالياً.", fontSize = 12.sp, color = textSecColor)
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(activeRepoExts, key = { it.id }) { ext ->
+                            ExtensionRowCard(
+                                ext = ext,
+                                isDarkMode = isDarkMode,
+                                onInstall = { viewModel.installExtension(ext.id, context) },
+                                onUninstall = { viewModel.uninstallExtension(ext.id, context) },
+                                onToggle = { viewModel.toggleExtension(ext.id, context) }
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+
+    // New Repository Link Dialog
+    if (showAddRepoDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddRepoDialog = false },
+            title = {
+                Text(
+                    text = "إضافة مستودع جديد",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textColor,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Right
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "أدخل رابط الـ JSON index الخاص بالمستودع الذي تود جلبه في التطبيق لمزامنة مصادر فصول المانجا الإضافية تلقائياً:",
+                        fontSize = 12.sp,
+                        color = textSecColor,
+                        lineHeight = 18.sp,
+                        textAlign = TextAlign.Right
+                    )
+                    OutlinedTextField(
+                        value = repoUrlInput,
+                        onValueChange = { repoUrlInput = it },
+                        placeholder = { Text("https://example.com/repo-index.json", fontSize = 12.sp, color = textSecColor) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textColor,
+                            unfocusedTextColor = textColor,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedContainerColor = inputBackground,
+                            unfocusedContainerColor = inputBackground
+                        ),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val input = repoUrlInput.trim()
+                        if (input.isNotEmpty()) {
+                            viewModel.addRepository(
+                                cleanUrl = input,
+                                context = context,
+                                onSuccess = { msg ->
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                                },
+                                onError = { err ->
+                                    android.widget.Toast.makeText(context, err, android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            )
+                            repoUrlInput = ""
+                            showAddRepoDialog = false
+                        } else {
+                            android.widget.Toast.makeText(context, "الرجاء إدخال الرابط أولاً!", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("إضافة", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        repoUrlInput = ""
+                        showAddRepoDialog = false
+                    }
+                ) {
+                    Text("إلغاء", color = textSecColor)
+                }
+            }
+        )
     }
 }
 
@@ -1301,6 +1581,17 @@ fun MangaProfileView(viewModel: MangaViewModel) {
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.img_mezo_logo_option5_1780289442777),
+                        contentDescription = "Mezo Logo",
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(RoundedCornerShape(22.dp))
+                            .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(22.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     Text(
                         text = if (isRegisterState) "إنشاء حساب جديد على Mezo" else "تسجيل الدخول إلى Mezo Manga",
                         fontSize = 18.sp,
@@ -3207,7 +3498,10 @@ fun MangaReaderView(
     val currentManga = manga ?: return
     val currentChapter = chapter ?: return
 
-    var activePage by remember(currentChapter.id) { mutableStateOf(currentChapter.lastReadPage) }
+    var activePage by remember(currentChapter.id) {
+        val maxPage = (currentChapter.totalPages - 1).coerceAtLeast(0)
+        mutableStateOf(currentChapter.lastReadPage.coerceIn(0, maxPage))
+    }
     var hideOverlays by remember { mutableStateOf(false) }
     var showQuickSettingsPanel by remember { mutableStateOf(false) }
     var showCommentsDrawerSheet by remember { mutableStateOf(false) }
@@ -3228,7 +3522,8 @@ fun MangaReaderView(
             .background(Color(0xFF07070B)) // Amoled pure black
     ) {
         if (isVerticalReading) {
-            val scrollState = rememberLazyListState()
+            val clampedActivePage = activePage.coerceIn(0, (totalPages - 1).coerceAtLeast(0))
+            val scrollState = rememberLazyListState(initialFirstVisibleItemIndex = clampedActivePage)
 
             LaunchedEffect(scrollState.firstVisibleItemIndex) {
                 activePage = scrollState.firstVisibleItemIndex
@@ -3298,7 +3593,8 @@ fun MangaReaderView(
                 }
             }
         } else {
-            val pagerState = rememberPagerState(initialPage = activePage) { totalPages }
+            val clampedActivePage = activePage.coerceIn(0, (totalPages - 1).coerceAtLeast(0))
+            val pagerState = rememberPagerState(initialPage = clampedActivePage) { totalPages }
 
             LaunchedEffect(pagerState.currentPage) {
                 activePage = pagerState.currentPage
@@ -3930,5 +4226,1093 @@ fun Modifier.shadowElevation() = this.drawBehind {
         size = size
     )
 }
+
+// === NEW MIHON VIEWS DEFINED TO MATCH SCREENSHOTS ===
+
+@Composable
+fun MangaBackHeader(
+    title: String,
+    onBack: () -> Unit,
+    trailingContent: @Composable (RowScope.() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "عودة",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = title,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f)
+        )
+        if (trailingContent != null) {
+            trailingContent()
+        }
+    }
+}
+
+// --- 1. UPDATES VIEW (التحديثات) ---
+@Composable
+fun MangaUpdatesView(viewModel: MangaViewModel) {
+    val isDarkMode by viewModel.isDarkMode.collectAsState()
+    val textColor = if (isDarkMode) Color.White else TextPrimaryLight
+    val textSecColor = if (isDarkMode) TextSecondaryDark else TextSecondaryLight
+    val context = LocalContext.current
+
+    val dummyUpdates = remember {
+        listOf(
+            Pair("The S Rank Butler", "فصل 45 • اليوم في ١١:٢٢ ص"),
+            Pair("The Apocalypse has co...", "فصل 57 • اليوم في ١٠:٤٠ ص"),
+            Pair("Logging 10.000 Years in...", "فصل 324 • اليوم في ٠٨:١٥ ص"),
+            Pair("The Ultimate Shut-In", "الفصل 81 - موطئ قدم في أولسا... • أمس"),
+            Pair("The Eternal Supreme", "الفصل 534 - حجر قوس قزح • أمس"),
+            Pair("The Eternal Supreme", "الفصل 533 - حماية الحرس • أمس"),
+            Pair("Demon Slayer", "الفصل 205 - نهاية القوى الروحية • قبل ٣ أيام"),
+            Pair("One Piece", "الفصل 1111 - مواجهة العمالقة • قبل ٤ أيام")
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "التحديثات",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = textColor
+        )
+        Text(
+            text = "آخر تحديث للمكتبة: قبل ٧ ساعات",
+            fontSize = 11.sp,
+            color = textSecColor,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        Text(
+            text = "اليوم",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(dummyUpdates) { item ->
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDarkMode) SlateCard else SlateLightCard
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Left action button (Download)
+                        IconButton(
+                            onClick = {
+                                Toast.makeText(context, "بدء تنزيل فصل ${item.first}", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowDownward,
+                                contentDescription = "تنزيل",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        // Text Info
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 12.dp),
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            Text(
+                                text = item.first,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textColor,
+                                textAlign = TextAlign.Right
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = item.second,
+                                fontSize = 12.sp,
+                                color = textSecColor,
+                                textAlign = TextAlign.Right
+                            )
+                        }
+
+                        // Red dot for unread status
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(PriorityHigh)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// --- 2. MORE VIEW (المزيد) ---
+@Composable
+fun MangaMoreView(viewModel: MangaViewModel) {
+    val isDarkMode by viewModel.isDarkMode.collectAsState()
+    val downloadOnly by viewModel.downloadOnly.collectAsState()
+    val incognitoMode by viewModel.incognitoMode.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
+
+    val textColor = if (isDarkMode) Color.White else TextPrimaryLight
+    val textSecColor = if (isDarkMode) TextSecondaryDark else TextSecondaryLight
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        // Upper Profile section matching Mihon logo design
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = currentUser?.username ?: "مستكشف المانجا المجهول",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textColor
+                )
+                Text(
+                    text = currentUser?.email ?: "الاشتراك المجاني • انضم يونيو ٢٠٢٦",
+                    fontSize = 12.sp,
+                    color = textSecColor
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            // Profile circular avatar framed by a dynamic accent board
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                    .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "Avatar",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+        }
+
+        // Toggles block
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkMode) SlateCard else SlateLightCard
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+                // Toggle 1: Download Only
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Switch(
+                        checked = downloadOnly,
+                        onCheckedChange = { viewModel.setDownloadOnly(it) }
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = "المنزل فقط",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
+                        )
+                        Text(
+                            text = "تجنب التنزيل الإجباري للمحتوى غير المخزن مؤقتاً",
+                            fontSize = 11.sp,
+                            color = textSecColor,
+                            textAlign = TextAlign.Right
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Icon(
+                        imageVector = Icons.Default.CloudDownload,
+                        contentDescription = "تحميل فقط",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Divider(color = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+
+                // Toggle 2: Incognito Mode
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Switch(
+                        checked = incognitoMode,
+                        onCheckedChange = { viewModel.setIncognitoMode(it) }
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = "الوضع المخفي",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
+                        )
+                        Text(
+                            text = "إيقاف حفظ سجل القراءة مؤقتاً وبشكل مؤقت",
+                            fontSize = 11.sp,
+                            color = textSecColor,
+                            textAlign = TextAlign.Right
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Icon(
+                        imageVector = Icons.Default.VisibilityOff,
+                        contentDescription = "وضع مخفي",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        // Action Options
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkMode) SlateCard else SlateLightCard
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
+            Column(modifier = Modifier.padding(4.dp)) {
+                MangaMoreMenuItem(
+                    icon = Icons.Default.Download,
+                    title = "قائمة التنزيلات",
+                    subtitle = "تنزيل الفصول ومتابعة الطابور المجدول",
+                    onClick = { Toast.makeText(context, "جاري فتح طابور التنزيل", Toast.LENGTH_SHORT).show() }
+                )
+                MangaMoreMenuItem(
+                    icon = Icons.Default.Category,
+                    title = "الفئات والمجموعات",
+                    subtitle = "تحرير وتخصيص الفئات لتنظيم مكتبتك",
+                    onClick = { viewModel.navigateTo(MangaUiScreen.LibrarySettings) }
+                )
+                MangaMoreMenuItem(
+                    icon = Icons.Default.BarChart,
+                    title = "إحصائيات القراءة",
+                    subtitle = "إجمالي الدقائق، الرقابة الذاتية والسلاسل المفضلة",
+                    onClick = { Toast.makeText(context, "مجموع وقت القراءة: 340 دقيقة", Toast.LENGTH_LONG).show() }
+                )
+                MangaMoreMenuItem(
+                    icon = Icons.Default.Storage,
+                    title = "البيانات والتخزين",
+                    subtitle = "النسخ الاحتياطي، الاستعادة وتخزين الملفات بالهاتف",
+                    onClick = { viewModel.navigateTo(MangaUiScreen.LibrarySettings) }
+                )
+                MangaMoreMenuItem(
+                    icon = Icons.Default.Settings,
+                    title = "الإعدادات العامة",
+                    subtitle = "التحكم بالمظهر، السمات، والميزات المتقدمة للتطبيق",
+                    onClick = { viewModel.navigateTo(MangaUiScreen.Settings) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(30.dp))
+    }
+}
+
+@Composable
+fun MangaMoreMenuItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.End
+        ) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                color = if (MaterialTheme.colorScheme.background == Color.Black) TextSecondaryDark else TextSecondaryLight,
+                textAlign = TextAlign.Right
+            )
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Icon(
+            imageVector = icon,
+            contentDescription = title,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+    }
+}
+
+// --- 3. SETTINGS ROOT VIEW (الإعدادات العامة) ---
+@Composable
+fun MangaSettingsView(viewModel: MangaViewModel) {
+    val isDarkMode by viewModel.isDarkMode.collectAsState()
+    val themeAccentPreset by viewModel.themeAccentPreset.collectAsState()
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        MangaBackHeader(
+            title = "الإعدادات",
+            onBack = { viewModel.navigateBack() },
+            trailingContent = {
+                IconButton(onClick = { Toast.makeText(context, "البحث في الإعدادات...", Toast.LENGTH_SHORT).show() }) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "بحث",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkMode) SlateCard else SlateLightCard
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(4.dp)) {
+                MangaSettingsItem(
+                    icon = Icons.Default.Palette,
+                    title = "المظهر",
+                    subtitle = "السمات المخصصة، الوضع الليلي ($themeAccentPreset)",
+                    onClick = { viewModel.navigateTo(MangaUiScreen.AppearanceSettings) }
+                )
+                MangaSettingsItem(
+                    icon = Icons.Default.LibraryBooks,
+                    title = "المكتبة",
+                    subtitle = "قوائم التصنيفات، التحديث التلقائي والقيود الفنية",
+                    onClick = { viewModel.navigateTo(MangaUiScreen.LibrarySettings) }
+                )
+                MangaSettingsItem(
+                    icon = Icons.Default.MenuBook,
+                    title = "القارئ",
+                    subtitle = "إتجاه القراءة الافتراضي، إعدادات الحواف واللمس",
+                    onClick = { Toast.makeText(context, "القارئ: اتجاه القراءة الافتراضي عمودي", Toast.LENGTH_SHORT).show() }
+                )
+                MangaSettingsItem(
+                    icon = Icons.Default.Download,
+                    title = "التنزيلات",
+                    subtitle = "موقع التخزين، حدود التنزيل المجدولة وصور الفصول",
+                    onClick = { Toast.makeText(context, "تم ضبط الحدود الفنية للتنزيلات", Toast.LENGTH_SHORT).show() }
+                )
+                MangaSettingsItem(
+                    icon = Icons.Default.Sync,
+                    title = "التتبع",
+                    subtitle = "ربط وتتبع حسابات AniList / MyAnimeList ومزامنة تقدمك",
+                    onClick = { Toast.makeText(context, "تتبع الحسابات نشط ومستقر", Toast.LENGTH_SHORT).show() }
+                )
+                MangaSettingsItem(
+                    icon = Icons.Default.Explore,
+                    title = "تصفح ومصادر القراءة",
+                    subtitle = "إضافات ومستودعات Keiyoushi والتحكم بالمواقع ومحركات البحث",
+                    onClick = { viewModel.navigateTo(MangaUiScreen.Sources) }
+                )
+                MangaSettingsItem(
+                    icon = Icons.Default.Backup,
+                    title = "البيانات والنسخ الاحتياطي",
+                    subtitle = "حفظ نسخة مشفرة على الهاتف واستردادها بلمسة وحدة",
+                    onClick = { viewModel.navigateTo(MangaUiScreen.Profile) } // Profile screen has the backup view built-in!
+                )
+                MangaSettingsItem(
+                    icon = Icons.Default.Security,
+                    title = "الأمان والخصوصية",
+                    subtitle = "تأمين بصمة الإصبع والوجه، سجل مؤقت تلقائي وتأمين الروابط",
+                    onClick = { Toast.makeText(context, "الأمان مفعل ومحدث بآخر حزمة سرية", Toast.LENGTH_SHORT).show() }
+                )
+                MangaSettingsItem(
+                    icon = Icons.Default.Build,
+                    title = "إعدادات متقدمة",
+                    subtitle = "مسح ذاكرة التخزين المؤقت، سجلات الشوائب وتقارير التحميل",
+                    onClick = { Toast.makeText(context, "تم مسح وتصفير ذاكرة التخزين المؤقت للتطبيق بنجاح", Toast.LENGTH_SHORT).show() }
+                )
+                MangaSettingsItem(
+                    icon = Icons.Default.Info,
+                    title = "حول التطبيق",
+                    subtitle = "اصدار ميهون v0.17.0 • مفتوح المصدر ومرخص لعام ٢٠٢٦",
+                    onClick = { Toast.makeText(context, "تطبيق Mihon Hub v0.17.0 • تم التطوير بالحب والشغف", Toast.LENGTH_LONG).show() }
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+fun MangaSettingsItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.End
+        ) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                color = if (MaterialTheme.colorScheme.background == Color.Black) TextSecondaryDark else TextSecondaryLight,
+                textAlign = TextAlign.Right
+            )
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Icon(
+            imageVector = icon,
+            contentDescription = title,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp)
+        )
+    }
+}
+
+// --- 4. APPEARANCE SETTINGS VIEW (إعدادات المظهر والسمات الكوزمية) ---
+@Composable
+fun MangaAppearanceSettingsView(viewModel: MangaViewModel) {
+    val isDarkMode by viewModel.isDarkMode.collectAsState()
+    val pureBlackDark by viewModel.pureBlackDark.collectAsState()
+    val relativeTime by viewModel.relativeTime.collectAsState()
+    val renderMangaCovers by viewModel.renderMangaCovers.collectAsState()
+    val themeAccentPreset by viewModel.themeAccentPreset.collectAsState()
+
+    val textColor = if (isDarkMode) Color.White else TextPrimaryLight
+    val textSecColor = if (isDarkMode) TextSecondaryDark else TextSecondaryLight
+    val context = LocalContext.current
+
+    val presets = remember {
+        listOf(
+            "منتصف الليل",
+            "الافتراضي",
+            "كاتبوتشينو",
+            "أخضر",
+            "أرجواني",
+            "Nord",
+            "أحمر",
+            "تاكو",
+            "ازرق مخضر",
+            "ين & يانغ",
+            "يوتسوبا",
+            "موجة مد و جزر"
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        MangaBackHeader(
+            title = "المظهر والسمات",
+            onBack = { viewModel.navigateBack() }
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Segmented theme light/dark toggle
+        Text(
+            text = "تفضيل وضع الإضاءة للواجهة",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(vertical = 6.dp)
+                .align(Alignment.End)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (isDarkMode) SlateCard else Color(0xFFE2E8F0)),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Light Option
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { if (isDarkMode) { viewModel.toggleDarkMode() } }
+                    .background(if (!isDarkMode) MaterialTheme.colorScheme.primary else Color.Transparent)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "فاتح (Light)",
+                    color = if (!isDarkMode) Color.White else textSecColor,
+                    fontWeight = if (!isDarkMode) FontWeight.Bold else FontWeight.Normal,
+                    fontSize = 13.sp
+                )
+            }
+
+            // Dark Option
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { if (!isDarkMode) { viewModel.toggleDarkMode() } }
+                    .background(if (isDarkMode) MaterialTheme.colorScheme.primary else Color.Transparent)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "داكن (Dark)",
+                    color = if (isDarkMode) Color.White else textSecColor,
+                    fontWeight = if (isDarkMode) FontWeight.Bold else FontWeight.Normal,
+                    fontSize = 13.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Grid selection of dynamic presets
+        Text(
+            text = "السمة المخصصة (Theme Presets)",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(vertical = 4.dp)
+                .align(Alignment.End)
+        )
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            modifier = Modifier
+                .height(290.dp)
+                .padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(presets) { preset ->
+                val isActive = themeAccentPreset == preset
+                val col = getPrimaryColorForPreset(preset)
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDarkMode) SlateCard else SlateLightCard
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.setThemeAccentPreset(preset) }
+                        .border(
+                            width = if (isActive) 2.dp else 0.5.dp,
+                            color = if (isActive) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(col),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isActive) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Active",
+                                    tint = if (preset == "ين & يانغ") Color.Black else Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = preset,
+                            fontSize = 11.sp,
+                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                            color = textColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Custom display options block
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkMode) SlateCard else SlateLightCard
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+                // Toggle 1: Pure Black
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Switch(
+                        checked = pureBlackDark,
+                        onCheckedChange = { viewModel.setPureBlackDark(it) }
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = "وضع داكن الأسود النقي",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
+                        )
+                        Text(
+                            text = "تفعيل خلفية سوداء نقية (AMOLED) لتوفير البطارية",
+                            fontSize = 11.sp,
+                            color = textSecColor,
+                            textAlign = TextAlign.Right
+                        )
+                    }
+                }
+
+                Divider(color = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+
+                // Toggle 2: Relative time
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Switch(
+                        checked = relativeTime,
+                        onCheckedChange = { viewModel.setRelativeTime(it) }
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = "التوقيت النسبي",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
+                        )
+                        Text(
+                            text = "عرض كلمات كـ «اليوم» بدلاً عن تاريخ اليوم الرقمي الكامل",
+                            fontSize = 11.sp,
+                            color = textSecColor,
+                            textAlign = TextAlign.Right
+                        )
+                    }
+                }
+
+                Divider(color = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+
+                // Toggle 3: Render covers inside descriptions
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Switch(
+                        checked = renderMangaCovers,
+                        onCheckedChange = { viewModel.setRenderMangaCovers(it) }
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = "تقديم الصور بأوصاف المانجا",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
+                        )
+                        Text(
+                            text = "سرعة معالجة الرسوم وتحميل غلاف فصول المانجا داخل تفاصيلها",
+                            fontSize = 11.sp,
+                            color = textSecColor,
+                            textAlign = TextAlign.Right
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(30.dp))
+    }
+}
+
+// --- 5. LIBRARY SETTINGS VIEW (إعدادات المكتبة الذكية وتصرف التمرير) ---
+@Composable
+fun MangaLibrarySettingsView(viewModel: MangaViewModel) {
+    val isDarkMode by viewModel.isDarkMode.collectAsState()
+    val sortSettingsPerCategory by viewModel.sortSettingsPerCategory.collectAsState()
+    val autoUpdateMetadata by viewModel.autoUpdateMetadata.collectAsState()
+    val showUnreadCountBadge by viewModel.showUnreadCountBadge.collectAsState()
+    val hideMissingChapters by viewModel.hideMissingChapters.collectAsState()
+
+    val textColor = if (isDarkMode) Color.White else TextPrimaryLight
+    val textSecColor = if (isDarkMode) TextSecondaryDark else TextSecondaryLight
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        MangaBackHeader(
+            title = "المكتبة وتحديث البيانات",
+            onBack = { viewModel.navigateBack() }
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Section: Categories (الفئات ومستودع مكتبة الصور)
+        Text(
+            text = "الفئات وقوائم القراءة",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(vertical = 4.dp)
+                .align(Alignment.End)
+        )
+
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkMode) SlateCard else SlateLightCard
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp)
+        ) {
+            Column(modifier = Modifier.padding(4.dp)) {
+                MangaSettingsItem(
+                    icon = Icons.Default.Edit,
+                    title = "تعديل فئات القراءة المخصصة",
+                    subtitle = "تحتوي مكتبتك على ٥ فئات افتراضية مضافة",
+                    onClick = { Toast.makeText(context, "إعدادات الفئات مضافة ومحمية", Toast.LENGTH_SHORT).show() }
+                )
+                MangaSettingsItem(
+                    icon = Icons.Default.Help,
+                    title = "الفئة الافتراضية المبدئية",
+                    subtitle = "تنزيل الفصول تلقائياً: «السؤال دائماً»",
+                    onClick = { Toast.makeText(context, "الوضع النشط: السؤال دائماً عند التحميل", Toast.LENGTH_SHORT).show() }
+                )
+
+                Divider(color = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+
+                // Toggle switch: local sorting custom rules
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Switch(
+                        checked = sortSettingsPerCategory,
+                        onCheckedChange = { viewModel.setSortSettingsPerCategory(it) }
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = "إعدادات فرز كل صنف",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
+                        )
+                        Text(
+                            text = "مزامنة ترتيب المانجا وفلترتها المخصص على كل فئة بشكل منعزل",
+                            fontSize = 11.sp,
+                            color = textSecColor,
+                            textAlign = TextAlign.Right
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Section: General updates
+        Text(
+            text = "تحديثات الخلفية العامة",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(vertical = 4.dp)
+                .align(Alignment.End)
+        )
+
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkMode) SlateCard else SlateLightCard
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp)
+        ) {
+            Column(modifier = Modifier.padding(4.dp)) {
+                MangaSettingsItem(
+                    icon = Icons.Default.Timer,
+                    title = "تواتر التنزيلات التلقائية",
+                    subtitle = "التحقق المجدول: «كل ١٢ ساعة» تلقائياً",
+                    onClick = { Toast.makeText(context, "تم تحديد وقت الفحص: كل ١٢ ساعة بالخلفية", Toast.LENGTH_SHORT).show() }
+                )
+                MangaSettingsItem(
+                    icon = Icons.Default.Wifi,
+                    title = "قيود التحديث التلقائي للجهاز",
+                    subtitle = "مسموح: «فقط عند الاتصال بـ شبكة Wi-Fi ومصدر شحن»",
+                    onClick = { Toast.makeText(context, "تم حفظ شروط القيود الآمنة للبطارية والإنترنت", Toast.LENGTH_SHORT).show() }
+                )
+
+                Divider(color = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+
+                // Toggle: update metadata
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Switch(
+                        checked = autoUpdateMetadata,
+                        onCheckedChange = { viewModel.setAutoUpdateMetadata(it) }
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = "تحديث البيانات الوصفية تلقائياً",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
+                        )
+                        Text(
+                            text = "تحقق تلقائياً من وجود غلاف جديد وتفاصيل محدثة عند جلب المكتبة",
+                            fontSize = 11.sp,
+                            color = textSecColor,
+                            textAlign = TextAlign.Right
+                        )
+                    }
+                }
+
+                Divider(color = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+
+                // Toggle: show unread count badge
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Switch(
+                        checked = showUnreadCountBadge,
+                        onCheckedChange = { viewModel.setShowUnreadCountBadge(it) }
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = "مؤشر غير المقروء في القائمة السفلية",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
+                        )
+                        Text(
+                            text = "عرض دائرة حمراء بأعلى علامة تبويب التحديثات حال نزول فصول جديدة",
+                            fontSize = 11.sp,
+                            color = textSecColor,
+                            textAlign = TextAlign.Right
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Section: Gestures and actions (تصرف السحب)
+        Text(
+            text = "تصرف وإيماءات السحب للفصول",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(vertical = 4.dp)
+                .align(Alignment.End)
+        )
+
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkMode) SlateCard else SlateLightCard
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp)
+        ) {
+            Column(modifier = Modifier.padding(4.dp)) {
+                MangaSettingsItem(
+                    icon = Icons.Default.SwipeLeft,
+                    title = "إجراء التمرير إلى اليسار للفصل",
+                    subtitle = "الإجراء الحالي: «تحديد الفصل كمقروء / غير مقروء»",
+                    onClick = { Toast.makeText(context, "اليسار: تحديد كمقروء", Toast.LENGTH_SHORT).show() }
+                )
+                MangaSettingsItem(
+                    icon = Icons.Default.SwipeRight,
+                    title = "إجراء التمرير إلى اليمين للفصل",
+                    subtitle = "الإجراء الحالي: «تحنزيل الفصل وتخزينه هاتفياً»",
+                    onClick = { Toast.makeText(context, "اليمين: بدء التنزيل", Toast.LENGTH_SHORT).show() }
+                )
+
+                Divider(color = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+
+                // Toggle: hide missing chapters
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Switch(
+                        checked = hideMissingChapters,
+                        onCheckedChange = { viewModel.setHideMissingChapters(it) }
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = "إخفاء مؤشرات الفصول المفقودة",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
+                        )
+                        Text(
+                            text = "تجاهل تنبيهات الأخطاء أو قنوات الاتصال بموقع المانجا حال فقدان فصل",
+                            fontSize = 11.sp,
+                            color = textSecColor,
+                            textAlign = TextAlign.Right
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(30.dp))
+    }
+}
+
 
 

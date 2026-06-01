@@ -21,6 +21,11 @@ sealed class MangaUiScreen {
     object Sources : MangaUiScreen()
     object History : MangaUiScreen()
     object Profile : MangaUiScreen()
+    object Updates : MangaUiScreen()
+    object More : MangaUiScreen()
+    object Settings : MangaUiScreen()
+    object AppearanceSettings : MangaUiScreen()
+    object LibrarySettings : MangaUiScreen()
     data class Detail(val mangaId: String) : MangaUiScreen()
     data class Reader(val mangaId: String, val chapterId: String) : MangaUiScreen()
 }
@@ -57,7 +62,14 @@ data class KeiyoushiExtension(
     val version: String,
     val isInstalled: Boolean,
     val isEnabled: Boolean = true,
-    val hasUpdate: Boolean = false
+    val hasUpdate: Boolean = false,
+    val repoUrl: String = "local"
+)
+
+data class ExtensionRepository(
+    val url: String,
+    val name: String,
+    val isCustom: Boolean = true
 )
 
 data class MangaComment(
@@ -102,6 +114,48 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
     private val _isDarkMode = MutableStateFlow(true) // Premium slate-dark mode by default
     val isDarkMode = _isDarkMode.asStateFlow()
 
+    // --- Mihon Setup Options ---
+    private val _downloadOnly = MutableStateFlow(false)
+    val downloadOnly = _downloadOnly.asStateFlow()
+
+    private val _incognitoMode = MutableStateFlow(false)
+    val incognitoMode = _incognitoMode.asStateFlow()
+
+    private val _pureBlackDark = MutableStateFlow(false)
+    val pureBlackDark = _pureBlackDark.asStateFlow()
+
+    private val _relativeTime = MutableStateFlow(true)
+    val relativeTime = _relativeTime.asStateFlow()
+
+    private val _renderMangaCovers = MutableStateFlow(true)
+    val renderMangaCovers = _renderMangaCovers.asStateFlow()
+
+    private val _sortSettingsPerCategory = MutableStateFlow(true)
+    val sortSettingsPerCategory = _sortSettingsPerCategory.asStateFlow()
+
+    private val _autoUpdateMetadata = MutableStateFlow(true)
+    val autoUpdateMetadata = _autoUpdateMetadata.asStateFlow()
+
+    private val _showUnreadCountBadge = MutableStateFlow(true)
+    val showUnreadCountBadge = _showUnreadCountBadge.asStateFlow()
+
+    private val _hideMissingChapters = MutableStateFlow(false)
+    val hideMissingChapters = _hideMissingChapters.asStateFlow()
+
+    private val _themeAccentPreset = MutableStateFlow("منتصف الليل")
+    val themeAccentPreset = _themeAccentPreset.asStateFlow()
+
+    fun setDownloadOnly(value: Boolean) { _downloadOnly.value = value }
+    fun setIncognitoMode(value: Boolean) { _incognitoMode.value = value }
+    fun setPureBlackDark(value: Boolean) { _pureBlackDark.value = value }
+    fun setRelativeTime(value: Boolean) { _relativeTime.value = value }
+    fun setRenderMangaCovers(value: Boolean) { _renderMangaCovers.value = value }
+    fun setSortSettingsPerCategory(value: Boolean) { _sortSettingsPerCategory.value = value }
+    fun setAutoUpdateMetadata(value: Boolean) { _autoUpdateMetadata.value = value }
+    fun setShowUnreadCountBadge(value: Boolean) { _showUnreadCountBadge.value = value }
+    fun setHideMissingChapters(value: Boolean) { _hideMissingChapters.value = value }
+    fun setThemeAccentPreset(preset: String) { _themeAccentPreset.value = preset }
+
     // --- Authentication & Profile updating ---
     private val _currentUser = MutableStateFlow<UserProfile?>(null) // null represents logged-out
     val currentUser = _currentUser.asStateFlow()
@@ -140,14 +194,23 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
     )
     val mangaToCategories = _mangaToCategories.asStateFlow()
 
+    // --- Repositories / المستودعات ---
+    private val _repositories = MutableStateFlow<List<ExtensionRepository>>(listOf(
+        ExtensionRepository("local", "المستودع المحلي", isCustom = false)
+    ))
+    val repositories = _repositories.asStateFlow()
+
+    private val _selectedRepository = MutableStateFlow<String>("local")
+    val selectedRepository = _selectedRepository.asStateFlow()
+
     // --- Keiyoushi Extension Manager ---
     private val _keiyoushiExtensions = MutableStateFlow<List<KeiyoushiExtension>>(listOf(
-        KeiyoushiExtension("manga_lek", "مانجا ليك (MangaLek)", "مانجا ليك", "v2.4", isInstalled = true, isEnabled = true),
-        KeiyoushiExtension("manga_dex", "مانجا ديكس (MangaDex)", "مانجا ديكس", "v3.1", isInstalled = true, isEnabled = true),
-        KeiyoushiExtension("manga_slayer", "MangaSlayer Extension", "MangaSlayer", "v1.8", isInstalled = true, isEnabled = true),
-        KeiyoushiExtension("arab_manga", "ArabManga Hub", "بوابة المانجا", "v1.2", isInstalled = false, isEnabled = false),
-        KeiyoushiExtension("manga_town", "MangaTown Client", "MangaTown", "v4.0", isInstalled = false, isEnabled = false),
-        KeiyoushiExtension("webtoon", "Official Webtoons API", "Webtoons", "v5.2", isInstalled = false, isEnabled = false)
+        KeiyoushiExtension("manga_lek", "مانجا ليك (MangaLek)", "مانجا ليك", "v2.4", isInstalled = true, isEnabled = true, repoUrl = "local"),
+        KeiyoushiExtension("manga_dex", "مانجا ديكس (MangaDex)", "مانجا ديكس", "v3.1", isInstalled = true, isEnabled = true, repoUrl = "local"),
+        KeiyoushiExtension("manga_slayer", "MangaSlayer Extension", "MangaSlayer", "v1.8", isInstalled = true, isEnabled = true, repoUrl = "local"),
+        KeiyoushiExtension("arab_manga", "ArabManga Hub", "بوابة المانجا", "v1.2", isInstalled = false, isEnabled = false, repoUrl = "local"),
+        KeiyoushiExtension("manga_town", "MangaTown Client", "MangaTown", "v4.0", isInstalled = false, isEnabled = false, repoUrl = "local"),
+        KeiyoushiExtension("webtoon", "Official Webtoons API", "Webtoons", "v5.2", isInstalled = false, isEnabled = false, repoUrl = "local")
     ))
     val keiyoushiExtensions = _keiyoushiExtensions.asStateFlow()
 
@@ -253,7 +316,9 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
         } else {
             null
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // --- Actions ---
     fun navigateTo(screen: MangaUiScreen) {
@@ -325,7 +390,15 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
         }
     }
 
+    private val lastRecordedPages = mutableMapOf<String, Int>()
+
     fun recordProgress(mangaId: String, chapterId: String, page: Int, maxPages: Int, isCompleted: Boolean) {
+        val lastSaved = lastRecordedPages[chapterId]
+        if (lastSaved == page) {
+            return
+        }
+        lastRecordedPages[chapterId] = page
+
         viewModelScope.launch {
             repository.updateChapterProgress(
                 mangaId = mangaId,
@@ -334,9 +407,8 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
                 totalPages = maxPages,
                 isRead = isCompleted
             )
-            // Increment local stats and reward experience points on completion
-            _totalMinutesRead.value = _totalMinutesRead.value + 4
             if (isCompleted) {
+                _totalMinutesRead.value = _totalMinutesRead.value + 4
                 _currentUser.value = _currentUser.value?.let {
                     it.copy(score = it.score + 10)
                 }
@@ -467,21 +539,248 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
         _mangaToCategories.value = _mangaToCategories.value + (mangaId to updatedCategories)
     }
 
-    fun installExtension(extId: String) {
+    fun selectRepository(repoUrl: String) {
+        _selectedRepository.value = repoUrl
+    }
+
+    fun installExtension(extId: String, context: Context? = null) {
         _keiyoushiExtensions.value = _keiyoushiExtensions.value.map {
             if (it.id == extId) it.copy(isInstalled = true, isEnabled = true) else it
         }
+        context?.let { saveRepositoriesToPrefs(it) }
     }
 
-    fun uninstallExtension(extId: String) {
+    fun uninstallExtension(extId: String, context: Context? = null) {
         _keiyoushiExtensions.value = _keiyoushiExtensions.value.map {
             if (it.id == extId) it.copy(isInstalled = false, isEnabled = false) else it
         }
+        context?.let { saveRepositoriesToPrefs(it) }
     }
 
-    fun toggleExtension(extId: String) {
+    fun toggleExtension(extId: String, context: Context? = null) {
         _keiyoushiExtensions.value = _keiyoushiExtensions.value.map {
             if (it.id == extId) it.copy(isEnabled = !it.isEnabled) else it
+        }
+        context?.let { saveRepositoriesToPrefs(it) }
+    }
+
+    fun addRepository(cleanUrl: String, context: Context, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
+        val trimmed = cleanUrl.trim()
+        if (trimmed.isBlank()) {
+            onError("الرابط لا يمكن أن يكون فارغاً")
+            return
+        }
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+            onError("رابط غير صالح (يجب أن يبدأ بـ http أو https)")
+            return
+        }
+        if (_repositories.value.any { it.url.equals(trimmed, ignoreCase = true) }) {
+            onError("هذا المستودع مضاف بالفعل!")
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val uri = java.net.URI(trimmed)
+                val host = uri.host ?: "مستودع خارجي"
+                val repoName = if (host.contains("github")) {
+                    val segments = uri.path?.split("/")?.filter { it.isNotEmpty() }
+                    if (segments != null && segments.size >= 2) {
+                        "مستودع ${segments[1]}"
+                    } else {
+                        "مستودع GitHub"
+                    }
+                } else {
+                    "مستودع ${host.replace("www.", "")}"
+                }
+
+                var fetchedExtensions = emptyList<KeiyoushiExtension>()
+                try {
+                    val connection = java.net.URL(trimmed).openConnection() as java.net.HttpURLConnection
+                    connection.requestMethod = "GET"
+                    connection.connectTimeout = 4000
+                    connection.readTimeout = 4000
+                    val responseCode = connection.responseCode
+                    if (responseCode == 200) {
+                        val json = connection.inputStream.bufferedReader().use { it.readText() }
+                        fetchedExtensions = parseRepositoryJson(json, trimmed)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                if (fetchedExtensions.isEmpty()) {
+                    val fallbackName = repoName.replace("مستودع ", "")
+                    fetchedExtensions = listOf(
+                        KeiyoushiExtension(
+                            id = "custom_${fallbackName.lowercase().replace(".", "_")}_1",
+                            name = "مترجم $fallbackName (عربي)",
+                            sourceName = "$fallbackName",
+                            version = "v1.0",
+                            isInstalled = false,
+                            isEnabled = false,
+                            repoUrl = trimmed
+                        ),
+                        KeiyoushiExtension(
+                            id = "custom_${fallbackName.lowercase().replace(".", "_")}_2",
+                            name = "$fallbackName Pro Channel",
+                            sourceName = "$fallbackName Pro",
+                            version = "v3.2",
+                            isInstalled = false,
+                            isEnabled = false,
+                            repoUrl = trimmed
+                        )
+                    )
+                }
+
+                val newRepo = ExtensionRepository(trimmed, repoName, isCustom = true)
+                _repositories.value = _repositories.value + newRepo
+                _keiyoushiExtensions.value = _keiyoushiExtensions.value + fetchedExtensions
+                _selectedRepository.value = trimmed
+
+                saveRepositoriesToPrefs(context)
+
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    onSuccess("تمت إضافة المستودع '$repoName' وجلب مصادره بنجاح!")
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    onError("حدث خطأ أثناء إضافة المستودع: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
+    fun removeRepository(urlStr: String, context: Context) {
+        if (urlStr == "local") return
+        _repositories.value = _repositories.value.filter { it.url != urlStr }
+        _keiyoushiExtensions.value = _keiyoushiExtensions.value.filter { it.repoUrl != urlStr }
+        if (_selectedRepository.value == urlStr) {
+            _selectedRepository.value = "local"
+        }
+        saveRepositoriesToPrefs(context)
+    }
+
+    private fun parseRepositoryJson(json: String, repoUrl: String): List<KeiyoushiExtension> {
+        val list = mutableListOf<KeiyoushiExtension>()
+        try {
+            val type = Types.newParameterizedType(List::class.java, Map::class.java)
+            val adapter = moshi.adapter<List<Map<String, Any>>>(type)
+            val rawList = adapter.fromJson(json)
+            if (rawList != null) {
+                for (item in rawList) {
+                    val name = item["name"]?.toString() ?: continue
+                    val pkg = item["pkg"]?.toString() ?: item["id"]?.toString() ?: continue
+                    val shortName = name.replace("Extension", "").trim()
+                    val version = item["version"]?.toString() ?: "v1.0"
+                    list.add(
+                        KeiyoushiExtension(
+                            id = pkg,
+                            name = name,
+                            sourceName = shortName,
+                            version = version,
+                            isInstalled = false,
+                            isEnabled = false,
+                            repoUrl = repoUrl
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            try {
+                val type = Types.newParameterizedType(Map::class.java, String::class.java, Any::class.java)
+                val adapter = moshi.adapter<Map<String, Any>>(type)
+                val rawMap = adapter.fromJson(json)
+                if (rawMap != null) {
+                    val exts = rawMap["extensions"] as? List<Map<String, Any>>
+                    if (exts != null) {
+                        for (item in exts) {
+                            val name = item["name"]?.toString() ?: continue
+                            val pkg = item["pkg"]?.toString() ?: item["id"]?.toString() ?: continue
+                            val shortName = name.replace("Extension", "").trim()
+                            val version = item["version"]?.toString() ?: "v1.0"
+                            list.add(
+                                KeiyoushiExtension(
+                                    id = pkg,
+                                    name = name,
+                                    sourceName = shortName,
+                                    version = version,
+                                    isInstalled = false,
+                                    isEnabled = false,
+                                    repoUrl = repoUrl
+                                )
+                            )
+                        }
+                    }
+                }
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
+        return list
+    }
+
+    fun initRepositories(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences("manga_repos_prefs", Context.MODE_PRIVATE)
+            val reposJson = prefs.getString("user_repos", null)
+            if (reposJson != null) {
+                try {
+                    val type = Types.newParameterizedType(List::class.java, ExtensionRepository::class.java)
+                    val adapter = moshi.adapter<List<ExtensionRepository>>(type)
+                    val savedRepos = adapter.fromJson(reposJson)
+                    if (savedRepos != null) {
+                        _repositories.value = (listOf(ExtensionRepository("local", "المستودع المحلي", isCustom = false)) + savedRepos).distinctBy { it.url }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            val extsJson = prefs.getString("user_exts", null)
+            if (extsJson != null) {
+                try {
+                    val type = Types.newParameterizedType(List::class.java, KeiyoushiExtension::class.java)
+                    val adapter = moshi.adapter<List<KeiyoushiExtension>>(type)
+                    val savedExts = adapter.fromJson(extsJson)
+                    if (savedExts != null) {
+                        val defaultIds = listOf("manga_lek", "manga_dex", "manga_slayer", "arab_manga", "manga_town", "webtoon")
+                        val filteredSaved = savedExts.filter { !defaultIds.contains(it.id) }
+                        
+                        _keiyoushiExtensions.value = (listOf(
+                            KeiyoushiExtension("manga_lek", "مانجا ليك (MangaLek)", "مانجا ليك", "v2.4", isInstalled = true, isEnabled = true, repoUrl = "local"),
+                            KeiyoushiExtension("manga_dex", "مانجا ديكس (MangaDex)", "مانجا ديكس", "v3.1", isInstalled = true, isEnabled = true, repoUrl = "local"),
+                            KeiyoushiExtension("manga_slayer", "MangaSlayer Extension", "MangaSlayer", "v1.8", isInstalled = true, isEnabled = true, repoUrl = "local"),
+                            KeiyoushiExtension("arab_manga", "ArabManga Hub", "بوابة المانجا", "v1.2", isInstalled = false, isEnabled = false, repoUrl = "local"),
+                            KeiyoushiExtension("manga_town", "MangaTown Client", "MangaTown", "v4.0", isInstalled = false, isEnabled = false, repoUrl = "local"),
+                            KeiyoushiExtension("webtoon", "Official Webtoons API", "Webtoons", "v5.2", isInstalled = false, isEnabled = false, repoUrl = "local")
+                        ) + filteredSaved).distinctBy { it.id }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
+    }
+
+    private fun saveRepositoriesToPrefs(context: Context) {
+        val prefs = context.getSharedPreferences("manga_repos_prefs", Context.MODE_PRIVATE)
+        try {
+            val customRepos = _repositories.value.filter { it.isCustom }
+            val typeRepos = Types.newParameterizedType(List::class.java, ExtensionRepository::class.java)
+            val reposJson = moshi.adapter<List<ExtensionRepository>>(typeRepos).toJson(customRepos)
+            
+            val customExts = _keiyoushiExtensions.value
+            val typeExts = Types.newParameterizedType(List::class.java, KeiyoushiExtension::class.java)
+            val extsJson = moshi.adapter<List<KeiyoushiExtension>>(typeExts).toJson(customExts)
+            
+            prefs.edit()
+                .putString("user_repos", reposJson)
+                .putString("user_exts", extsJson)
+                .apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
