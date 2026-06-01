@@ -1,0 +1,40 @@
+<resources>
+    <!-- App Name -->
+    <string name="app_name">Mezo</string>
+
+    <!-- General Actions -->
+    <string name="back">رجوع</string>
+    <string name="close">إغلاق</string>
+    <string name="save">حفظ</string>
+    <string name="delete">حذف</string>
+    <string name="search_placeholder">بحث...</string>
+    <string name="cancel">إلغاء</string>
+
+    <!-- Navigation Labels -->
+    <string name="nav_library">المكتبة</string>
+    <string name="nav_browse">تصفح</string>
+    <string name="nav_history">السجل</string>
+
+    <!-- Library Screen -->
+    <string name="empty_library">المكتبة فارغة</string>
+    <string name="empty_library_desc">تصفح المصادر الآن لإضافة فصول وقصص المانجا المفضلة لديك.</string>
+
+    <!-- Detail Screen -->
+    <string name="author">المؤلف</string>
+    <string name="status">الحالة</string>
+    <string name="rating">التقييم</string>
+    <string name="manga_story">قصة المانجا</string>
+    <string name="start_reading">ابدأ القراءة</string>
+    <string name="resume_reading">متابعة القراءة</string>
+    <string name="btn_add_library">إضافة للمكتبة</string>
+    <string name="btn_in_library">في المكتبة</string>
+
+    <!-- Sorter -->
+    <string name="sort_oldest">من البداية</string>
+    <string name="sort_newest">الأحدث أولاً</string>
+
+    <!-- Reader Screen Settings -->
+    <string name="reading_mode">وضع القراءة</string>
+    <string name="webtoon_mode">عمودي (ويب تون)</string>
+    <string name="manga_mode">أفقي (مانجا)</string>
+</resources>

@@ -1,0 +1,6 @@
+{
+  "name": "Mezo",
+  "description": "تطبيق قصص وقارئ مانجا متطور مستوحى من ميهون وتاتشيومي مع دعم كامل للقراءة العمودية والأفقية والمكتبة المفضلة والسجل المحلي.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
