@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.ChapterEntity
 import com.example.data.HistoryEntity
@@ -91,10 +92,7 @@ fun MangaScreen(
                           currentScreen is MangaUiScreen.History ||
                           currentScreen is MangaUiScreen.Profile ||
                           currentScreen is MangaUiScreen.Updates ||
-                          currentScreen is MangaUiScreen.More ||
-                          currentScreen is MangaUiScreen.Settings ||
-                          currentScreen is MangaUiScreen.AppearanceSettings ||
-                          currentScreen is MangaUiScreen.LibrarySettings,
+                          currentScreen is MangaUiScreen.More,
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
             ) {
@@ -145,6 +143,18 @@ fun MangaScreen(
                     }
                     is MangaUiScreen.LibrarySettings -> {
                         MangaLibrarySettingsView(viewModel = viewModel)
+                    }
+                    is MangaUiScreen.Downloads -> {
+                        MangaDownloadsQueueView(viewModel = viewModel)
+                    }
+                    is MangaUiScreen.Categories -> {
+                        MangaCategoriesView(viewModel = viewModel)
+                    }
+                    is MangaUiScreen.Stats -> {
+                        MangaStatsView(viewModel = viewModel)
+                    }
+                    is MangaUiScreen.Backup -> {
+                        MangaBackupView(viewModel = viewModel)
                     }
                     is MangaUiScreen.Detail -> {
                         MangaDetailView(
@@ -261,7 +271,7 @@ fun MangaBottomNav(
             onClick = { onNavigate(MangaUiScreen.History) },
             icon = {
                 Icon(
-                    imageVector = Icons.Default.Refresh,
+                    imageVector = Icons.Default.History,
                     contentDescription = "السجل",
                     modifier = Modifier.size(22.dp)
                 )
@@ -317,7 +327,7 @@ fun MangaBottomNav(
             onClick = { onNavigate(MangaUiScreen.Library) },
             icon = {
                 Icon(
-                    imageVector = Icons.Default.Favorite,
+                    imageVector = Icons.Default.CollectionsBookmark,
                     contentDescription = "المكتبة",
                     modifier = Modifier.size(22.dp)
                 )
@@ -2694,6 +2704,7 @@ fun MangaDetailView(
                     gradientStart = currentManga.coverGradientStart,
                     gradientEnd = currentManga.coverGradientEnd,
                     title = currentManga.titleAr,
+                    coverUrl = currentManga.coverUrl,
                     modifier = Modifier
                         .size(width = 110.dp, height = 160.dp)
                         .clip(RoundedCornerShape(12.dp))
@@ -3833,7 +3844,8 @@ fun MangaBookCoverArt(
     gradientStart: Long,
     gradientEnd: Long,
     title: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    coverUrl: String = ""
 ) {
     Box(
         modifier = modifier
@@ -3843,7 +3855,15 @@ fun MangaBookCoverArt(
                 )
             )
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
+        if (coverUrl.isNotEmpty()) {
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Canvas(modifier = Modifier.fillMaxSize()) {
             drawIntoCanvas { canvas ->
                 val centerOffset = Offset(size.width * 0.5f, size.height * 0.45f)
                 drawCircle(
@@ -3858,6 +3878,7 @@ fun MangaBookCoverArt(
                     center = centerOffset
                 )
             }
+        }
         }
 
         Box(
@@ -3934,35 +3955,13 @@ fun SimulatedMangaPage(
             .background(Brush.verticalGradient(colors = pageColors))
             .border(width = 0.5.dp, color = Color.White.copy(alpha = 0.1f))
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-
-            drawLine(
-                color = Color.White.copy(alpha = 0.12f),
-                start = Offset(0f, h * 0.45f),
-                end = Offset(w, h * 0.48f),
-                strokeWidth = 3f
-            )
-
-            drawLine(
-                color = Color.White.copy(alpha = 0.15f),
-                start = Offset(w * 0.5f, 0f),
-                end = Offset(w * 0.48f, h * 0.45f),
-                strokeWidth = 3f
-            )
-            
-            for (i in 0..12) {
-                val startX = (w * 0.05f) + (i * w * 0.08f)
-                drawLine(
-                    color = Color.White.copy(alpha = 0.05f),
-                    start = Offset(startX, h * 0.6f),
-                    end = Offset(startX + (w * 0.1f), h * 0.95f),
-                    strokeWidth = 1.5f
-                )
-            }
-        }
-
+        AsyncImage(
+            model = "https://picsum.photos/seed/${mangaId}_p${pageNumber}/800/1200",
+            contentDescription = "Page $pageNumber",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+        
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -4095,6 +4094,7 @@ fun MangaGridCard(
                 gradientStart = manga.coverGradientStart,
                 gradientEnd = manga.coverGradientEnd,
                 title = manga.titleAr,
+                coverUrl = manga.coverUrl,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(140.dp)
@@ -4541,25 +4541,25 @@ fun MangaMoreView(viewModel: MangaViewModel) {
                     icon = Icons.Default.Download,
                     title = "قائمة التنزيلات",
                     subtitle = "تنزيل الفصول ومتابعة الطابور المجدول",
-                    onClick = { Toast.makeText(context, "جاري فتح طابور التنزيل", Toast.LENGTH_SHORT).show() }
+                    onClick = { viewModel.navigateTo(MangaUiScreen.Downloads) }
                 )
                 MangaMoreMenuItem(
                     icon = Icons.Default.Category,
                     title = "الفئات والمجموعات",
                     subtitle = "تحرير وتخصيص الفئات لتنظيم مكتبتك",
-                    onClick = { viewModel.navigateTo(MangaUiScreen.LibrarySettings) }
+                    onClick = { viewModel.navigateTo(MangaUiScreen.Categories) }
                 )
                 MangaMoreMenuItem(
                     icon = Icons.Default.BarChart,
                     title = "إحصائيات القراءة",
                     subtitle = "إجمالي الدقائق، الرقابة الذاتية والسلاسل المفضلة",
-                    onClick = { Toast.makeText(context, "مجموع وقت القراءة: 340 دقيقة", Toast.LENGTH_LONG).show() }
+                    onClick = { viewModel.navigateTo(MangaUiScreen.Stats) }
                 )
                 MangaMoreMenuItem(
                     icon = Icons.Default.Storage,
                     title = "البيانات والتخزين",
                     subtitle = "النسخ الاحتياطي، الاستعادة وتخزين الملفات بالهاتف",
-                    onClick = { viewModel.navigateTo(MangaUiScreen.LibrarySettings) }
+                    onClick = { viewModel.navigateTo(MangaUiScreen.Backup) }
                 )
                 MangaMoreMenuItem(
                     icon = Icons.Default.Settings,

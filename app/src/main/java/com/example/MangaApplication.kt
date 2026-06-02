@@ -44,6 +44,7 @@ class MangaApplication : Application() {
                 rating = 4.9f,
                 genres = "أكشن, خيال, شونين, دراما",
                 sourceName = "مانجا ليك (MangaLek)",
+                coverUrl = "https://picsum.photos/seed/demon_slayer/400/600",
                 isBookmarked = true,
                 ratingVotes = 2480
             ),
@@ -59,6 +60,7 @@ class MangaApplication : Application() {
                 rating = 4.8f,
                 genres = "مغامرة, أكشن, كوميديا, خيال",
                 sourceName = "مانجا ديكس (MangaDex)",
+                coverUrl = "https://picsum.photos/seed/one_piece/400/600",
                 isBookmarked = false,
                 ratingVotes = 4210
             ),
@@ -74,6 +76,7 @@ class MangaApplication : Application() {
                 rating = 4.9f,
                 genres = "غموض, أكشن, مأساوي, عسكري",
                 sourceName = "MangaSlayer",
+                coverUrl = "https://picsum.photos/seed/attack_on_titan/400/600",
                 isBookmarked = false,
                 ratingVotes = 3105
             ),
@@ -89,6 +92,7 @@ class MangaApplication : Application() {
                 rating = 4.7f,
                 genres = "أكشن, قوة بالغة, بوابة, خيال",
                 sourceName = "بوابة المانجا",
+                coverUrl = "https://picsum.photos/seed/solo_leveling/400/600",
                 isBookmarked = true,
                 ratingVotes = 1950
             ),
@@ -104,6 +108,7 @@ class MangaApplication : Application() {
                 rating = 4.6f,
                 genres = "خارق للطبيعة, رعب, شونين, أكشن",
                 sourceName = "مانجا ليك (MangaLek)",
+                coverUrl = "https://picsum.photos/seed/jujutsu_kaisen/400/600",
                 isBookmarked = false,
                 ratingVotes = 1530
             )

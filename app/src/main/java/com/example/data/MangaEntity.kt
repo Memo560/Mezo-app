@@ -17,6 +17,7 @@ data class MangaEntity(
     val rating: Float,
     val genres: String,           // Comma separated categories e.g. "أكشن, مغامرة, خيال"
     val sourceName: String,       // e.g. "مانجا ليك", "Mangadex"
+    val coverUrl: String = "",
     val isBookmarked: Boolean = false,
     val ratingVotes: Int = 1240,
     val lastReadChapterId: String? = null,

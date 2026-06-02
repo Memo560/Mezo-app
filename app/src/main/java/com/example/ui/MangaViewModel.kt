@@ -26,6 +26,10 @@ sealed class MangaUiScreen {
     object Settings : MangaUiScreen()
     object AppearanceSettings : MangaUiScreen()
     object LibrarySettings : MangaUiScreen()
+    object Downloads : MangaUiScreen()
+    object Categories : MangaUiScreen()
+    object Stats : MangaUiScreen()
+    object Backup : MangaUiScreen()
     data class Detail(val mangaId: String) : MangaUiScreen()
     data class Reader(val mangaId: String, val chapterId: String) : MangaUiScreen()
 }
@@ -323,6 +327,18 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
     // --- Actions ---
     fun navigateTo(screen: MangaUiScreen) {
         if (_currentScreen.value != screen) {
+            val topLevelScreens = listOf(
+                MangaUiScreen.Library,
+                MangaUiScreen.Updates,
+                MangaUiScreen.History,
+                MangaUiScreen.Sources,
+                MangaUiScreen.More
+            )
+            
+            if (topLevelScreens.contains(screen)) {
+                screenBackstack.clear()
+            }
+            
             screenBackstack.add(screen)
             _currentScreen.value = screen
             
@@ -565,7 +581,7 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
     }
 
     fun addRepository(cleanUrl: String, context: Context, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
-        val trimmed = cleanUrl.trim()
+        var trimmed = cleanUrl.trim()
         if (trimmed.isBlank()) {
             onError("الرابط لا يمكن أن يكون فارغاً")
             return
@@ -574,6 +590,14 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
             onError("رابط غير صالح (يجب أن يبدأ بـ http أو https)")
             return
         }
+        
+        if (!trimmed.endsWith(".json")) {
+            if (!trimmed.endsWith("/")) {
+                trimmed += "/"
+            }
+            trimmed += "index.min.json"
+        }
+
         if (_repositories.value.any { it.url.equals(trimmed, ignoreCase = true) }) {
             onError("هذا المستودع مضاف بالفعل!")
             return
@@ -610,27 +634,10 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
                 }
 
                 if (fetchedExtensions.isEmpty()) {
-                    val fallbackName = repoName.replace("مستودع ", "")
-                    fetchedExtensions = listOf(
-                        KeiyoushiExtension(
-                            id = "custom_${fallbackName.lowercase().replace(".", "_")}_1",
-                            name = "مترجم $fallbackName (عربي)",
-                            sourceName = "$fallbackName",
-                            version = "v1.0",
-                            isInstalled = false,
-                            isEnabled = false,
-                            repoUrl = trimmed
-                        ),
-                        KeiyoushiExtension(
-                            id = "custom_${fallbackName.lowercase().replace(".", "_")}_2",
-                            name = "$fallbackName Pro Channel",
-                            sourceName = "$fallbackName Pro",
-                            version = "v3.2",
-                            isInstalled = false,
-                            isEnabled = false,
-                            repoUrl = trimmed
-                        )
-                    )
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        onError("فشل في جلب المصادر من المستودع أو أن المستودع فارغ.")
+                    }
+                    return@launch
                 }
 
                 val newRepo = ExtensionRepository(trimmed, repoName, isCustom = true)
@@ -664,7 +671,8 @@ class MangaViewModel(private val repository: MangaRepository) : ViewModel() {
     private fun parseRepositoryJson(json: String, repoUrl: String): List<KeiyoushiExtension> {
         val list = mutableListOf<KeiyoushiExtension>()
         try {
-            val type = Types.newParameterizedType(List::class.java, Map::class.java)
+            val mapType = Types.newParameterizedType(Map::class.java, String::class.java, Any::class.java)
+            val type = Types.newParameterizedType(List::class.java, mapType)
             val adapter = moshi.adapter<List<Map<String, Any>>>(type)
             val rawList = adapter.fromJson(json)
             if (rawList != null) {
